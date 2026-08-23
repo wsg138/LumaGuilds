@@ -73,6 +73,9 @@ enum class RankPermission {
     MANAGE_PERMISSIONS,
     CREATE_CLAIMS,
     DELETE_CLAIMS,
+
+    // External integrations
+    SUBMIT_COMPETITION_ENTRIES, // Submit guild-owned entries to Enthusia competitions
     
     // Special Roles
     ACCESS_ADMIN_COMMANDS,
