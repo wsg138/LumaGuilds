@@ -1,5 +1,8 @@
 package net.lumalyte.lg.utils
 
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+
 /**
  * Shared visual surfaces for the LumaGuilds redesign.
  *
@@ -32,6 +35,10 @@ object MenuTitleBuilder {
      * All redesign surfaces are six rows so navigation stays in a fixed location.
      */
     fun redesign(surface: MenuSurface, title: String = ""): String = compose(surface.glyphKey, title)
+
+    /** Localized GUI labels are Components; flatten only the title text before composing glyph markup. */
+    fun redesign(surface: MenuSurface, title: Component): String =
+        compose(surface.glyphKey, PlainTextComponentSerializer.plainText().serialize(title))
 
     private fun compose(glyphName: String, title: String): String {
         val prefix = "${HORIZONTAL_OFFSET}<glyph:${glyphName}>"
