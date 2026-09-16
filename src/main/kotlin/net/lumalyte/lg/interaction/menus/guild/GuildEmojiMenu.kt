@@ -106,8 +106,12 @@ class GuildEmojiMenu(
             .lore(lang.gui("menu.guild_emoji.input.example"))
             .lore(lang.gui("menu.guild_emoji.input.current", "emoji" to (inputEmoji ?: lang.raw("menu.guild_emoji.input.none"))))
 
-        validationError?.let { item.lore(lang.gui("menu.guild_emoji.input.invalid", "error" to it)) }
-            ?: if (inputEmoji != null) item.lore(lang.gui("menu.guild_emoji.input.valid"))
+        val error = validationError
+        if (error != null) {
+            item.lore(lang.gui("menu.guild_emoji.input.invalid", "error" to error))
+        } else if (inputEmoji != null) {
+            item.lore(lang.gui("menu.guild_emoji.input.valid"))
+        }
         item.lore(lang.gui("menu.guild_emoji.input.click"))
 
         pane.addItem(GuiItem(item) {
