@@ -1,338 +1,256 @@
 package net.lumalyte.lg.interaction.menus.guild
 
-import net.badgersmc.nexus.i18n.LangService
-import net.lumalyte.lg.utils.MenuTitleBuilder
-import net.lumalyte.lg.infrastructure.i18n.gui
-import net.lumalyte.lg.infrastructure.i18n.guiTitle
-import net.lumalyte.lg.infrastructure.i18n.GuiTextStyler
-import net.kyori.adventure.text.Component
-
 import com.github.stefvanschie.inventoryframework.gui.GuiItem
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui
 import com.github.stefvanschie.inventoryframework.pane.StaticPane
-import net.lumalyte.lg.application.services.GuildService
+import net.badgersmc.nexus.i18n.LangService
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.minimessage.MiniMessage
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import net.lumalyte.lg.application.services.ConfigService
+import net.lumalyte.lg.application.services.GuildService
 import net.lumalyte.lg.domain.entities.Guild
-import net.lumalyte.lg.interaction.listeners.ChatInputListener
+import net.lumalyte.lg.infrastructure.i18n.GuiTextStyler
+import net.lumalyte.lg.infrastructure.i18n.gui
+import net.lumalyte.lg.infrastructure.i18n.guiTitle
 import net.lumalyte.lg.interaction.listeners.ChatInputHandler
+import net.lumalyte.lg.interaction.listeners.ChatInputListener
 import net.lumalyte.lg.interaction.menus.Menu
+import net.lumalyte.lg.interaction.menus.MenuFactory
 import net.lumalyte.lg.interaction.menus.MenuNavigator
-import net.lumalyte.lg.utils.MenuItemBuilder
-import net.lumalyte.lg.utils.lore
-import net.lumalyte.lg.utils.name
 import net.lumalyte.lg.utils.ColorCodeUtils
 import net.lumalyte.lg.utils.GuildTagValidationMessages
+import net.lumalyte.lg.utils.MenuSurface
+import net.lumalyte.lg.utils.MenuTitleBuilder
+import net.lumalyte.lg.utils.lore
+import net.lumalyte.lg.utils.name
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.entity.Player
-import org.bukkit.event.inventory.ClickType
 import org.bukkit.inventory.ItemStack
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import net.kyori.adventure.text.minimessage.MiniMessage
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 
-class TagEditorMenu(private val menuNavigator: MenuNavigator, private val player: Player,
-                   private var guild: Guild): Menu, KoinComponent, ChatInputHandler {
+/** Guild-tag editor on the shared detail surface. */
+class TagEditorMenu(
+    private val menuNavigator: MenuNavigator,
+    private val player: Player,
+    private var guild: Guild,
+) : Menu, KoinComponent, ChatInputHandler {
 
     private val guildService: GuildService by inject()
-    private val menuItemBuilder: MenuItemBuilder by inject()
     private val chatInputListener: ChatInputListener by inject()
     private val configService: ConfigService by inject()
+    private val menuFactory: MenuFactory by inject()
     private val lang: LangService by inject()
 
-    // State for the tag input
     private var currentTag: String? = null
     private var inputTag: String? = null
     private var validationError: String? = null
-    private var inputInitialized: Boolean = false
+    private var inputInitialized = false
 
     override fun open() {
-        println("[LumaGuilds] TagEditorMenu: Opening menu for player ${player.name}")
-
-        // Load current tag (only if not already loaded)
-        if (currentTag == null) {
-            currentTag = guildService.getTag(guild.id)
-            println("[LumaGuilds] TagEditorMenu: Loaded currentTag from database: '$currentTag'")
-        } else {
-            println("[LumaGuilds] TagEditorMenu: Using existing currentTag: '$currentTag'")
-        }
-
-        // Initialize inputTag from currentTag on first open. After that, preserve
-        // user state — including an explicit clear (inputTag == null) — across
-        // re-opens triggered by button clicks.
+        guild = guildService.getGuild(guild.id) ?: guild
         if (!inputInitialized) {
+            currentTag = guildService.getTag(guild.id)
             inputTag = currentTag
             inputInitialized = true
-            println("[LumaGuilds] TagEditorMenu: Initialized inputTag to currentTag: '$inputTag'")
-        } else {
-            println("[LumaGuilds] TagEditorMenu: Preserving existing inputTag: '$inputTag'")
         }
+        validationError = inputTag?.let(::validateTag)
 
-        // Initialize validation state
-        val currentInput = inputTag
-        if (currentInput != null) {
-            validationError = validateTag(currentInput)
-            println("[LumaGuilds] TagEditorMenu: Validation result: ${validationError ?: "VALID"}")
-        }
-
-        // Create 3x9 chest GUI
-        val gui = ChestGui(3, MenuTitleBuilder.build(guild.guiTheme, 3, lang.guiTitle("menu.tag_editor.title", "guild" to guild.name)))
-        val pane = StaticPane(0, 0, 9, 3)
-        gui.setOnTopClick { guiEvent -> guiEvent.isCancelled = true }
-        gui.setOnBottomClick { guiEvent ->
-            if (guiEvent.click == ClickType.SHIFT_LEFT || guiEvent.click == ClickType.SHIFT_RIGHT) {
-                guiEvent.isCancelled = true
-            }
-        }
+        val gui = ChestGui(
+            6,
+            MenuTitleBuilder.redesign(MenuSurface.DETAIL, lang.guiTitle("menu.tag_editor.title", "guild" to guild.name)),
+        )
+        gui.setOnGlobalClick { it.isCancelled = true }
+        val pane = StaticPane(0, 0, 9, 6)
         gui.addPane(pane)
 
-        // Row 0: Current tag display
-        addCurrentTagDisplay(pane, 0, 0)
-        addTagStatusIndicator(pane, 4, 0)
-
-        // Row 1: Input and preview
-        addTagInputField(pane, 0, 1)
-        addPreviewSection(pane, 4, 1)
-
-        // Row 2: Action buttons
-        addSaveButton(pane, 2, 2)
-        addClearButton(pane, 4, 2)
-        addCancelButton(pane, 6, 2)
+        addCurrentTag(pane)
+        addInput(pane)
+        addStatus(pane)
+        addPreview(pane)
+        addSave(pane)
+        addClear(pane)
+        addCancel(pane)
+        addFooter(pane)
 
         gui.show(player)
     }
 
-    private fun addCurrentTagDisplay(pane: StaticPane, x: Int, y: Int) {
-        val currentTagDisplay = ItemStack.of(Material.NAME_TAG)
+    private fun addCurrentTag(pane: StaticPane) {
+        val item = ItemStack.of(Material.NAME_TAG)
             .name(lang.gui("menu.tag_editor.current.name"))
             .lore(lang.gui("menu.tag_editor.current.guild", "guild" to guild.name))
 
-        currentTag?.let { tagValue ->
-            val formattedTag = renderFormattedTag(tagValue)
-            currentTagDisplay.lore(lang.gui("menu.tag_editor.current.tag", "tag" to formattedTag))
+        currentTag?.let { tag ->
+            item.lore(lang.gui("menu.tag_editor.current.tag", "tag" to renderFormattedTag(tag)))
                 .lore(lang.gui("menu.tag_editor.current.description"))
-        } ?: run {
-            currentTagDisplay.lore(lang.gui("menu.tag_editor.current.not_set"))
-                .lore(lang.gui("menu.tag_editor.current.create"))
-        }
+        } ?: item.lore(lang.gui("menu.tag_editor.current.not_set"))
+            .lore(lang.gui("menu.tag_editor.current.create"))
 
-        val guiItem = GuiItem(currentTagDisplay) {
-            // Display only - no action needed
-        }
-        pane.addItem(guiItem, x, y)
+        pane.addItem(GuiItem(item), 4, 1)
     }
 
-    private fun addTagStatusIndicator(pane: StaticPane, x: Int, y: Int) {
-        val characterCount = inputTag?.let { countVisibleCharacters(it) } ?: 0
-        val statusItem = ItemStack.of(Material.PAPER)
-            .name(lang.gui("menu.tag_editor.status.name"))
-            .lore(lang.gui("menu.tag_editor.status.characters", "count" to characterCount))
-
-        if (characterCount > 32) {
-            statusItem.name(lang.gui("menu.tag_editor.status.too_long"))
-                .lore(lang.gui("menu.tag_editor.status.characters_error", "count" to characterCount))
-                .lore(lang.gui("menu.tag_editor.status.reduce"))
-        } else if (characterCount > 28) {
-            statusItem.name(lang.gui("menu.tag_editor.status.nearly_full"))
-                .lore(lang.gui("menu.tag_editor.status.characters", "count" to characterCount))
-                .lore(lang.gui("menu.tag_editor.status.close"))
-        } else {
-            statusItem.name(lang.gui("menu.tag_editor.status.ok"))
-                .lore(lang.gui("menu.tag_editor.status.characters", "count" to characterCount))
-        }
-
-        val guiItem = GuiItem(statusItem) {
-            // Display only - no action needed
-        }
-        pane.addItem(guiItem, x, y)
-    }
-
-    private fun addTagInputField(pane: StaticPane, x: Int, y: Int) {
-        val inputItem = ItemStack.of(Material.WRITABLE_BOOK)
-            .name(lang.gui("menu.tag_editor.input.name"))
+    private fun addInput(pane: StaticPane) {
+        val item = ItemStack.of(Material.WRITABLE_BOOK)
+            .name(if (isInInputMode()) lang.gui("menu.tag_editor.input.waiting") else lang.gui("menu.tag_editor.input.name"))
             .lore(lang.gui("menu.tag_editor.input.format"))
-            .lore(lang.gui("menu.tag_editor.input.examples"))
             .lore(lang.gui("menu.tag_editor.input.gradient"))
             .lore(lang.gui("menu.tag_editor.input.color"))
-            .lore(lang.gui("menu.tag_editor.input.bold"))
 
-        val currentInput = inputTag ?: ""
-        if (currentInput.isNotEmpty()) {
-            val formattedInput = renderFormattedTag(currentInput)
-            inputItem.lore(lang.gui("menu.tag_editor.input.current", "tag" to formattedInput))
-        } else {
-            inputItem.lore(lang.gui("menu.tag_editor.input.none"))
-        }
+        inputTag?.let { item.lore(lang.gui("menu.tag_editor.input.current", "tag" to renderFormattedTag(it))) }
+            ?: item.lore(lang.gui("menu.tag_editor.input.none"))
 
-        // Add validation status
-        if (validationError != null) {
-            inputItem.lore(lang.gui("menu.tag_editor.input.invalid", "error" to GuiTextStyler.style(Component.text(validationError!!))))
-        } else if (inputTag?.isNotEmpty() == true) {
-            inputItem.lore(lang.gui("menu.tag_editor.input.valid"))
-        }
+        validationError?.let { error ->
+            item.lore(lang.gui("menu.tag_editor.input.invalid", "error" to GuiTextStyler.style(Component.text(error))))
+        } ?: if (inputTag != null) item.lore(lang.gui("menu.tag_editor.input.valid"))
 
-        if (isInInputMode()) {
-            inputItem.name(lang.gui("menu.tag_editor.input.waiting"))
-                .lore(lang.gui("menu.tag_editor.input.prompt"))
-                .lore(lang.gui("menu.rank_edit.info.cancel_hint"))
-        } else {
-            inputItem.lore(lang.gui("menu.tag_editor.input.click"))
-        }
+        item.lore(
+            if (isInInputMode()) lang.gui("menu.tag_editor.input.prompt")
+            else lang.gui("menu.tag_editor.input.click"),
+        )
 
-        val guiItem = GuiItem(inputItem) {
-            if (!isInInputMode()) {
-                startChatInput()
-            } else {
-                player.sendMessage(lang.msg("menu.tag_editor.feedback.already_waiting"))
-            }
-        }
-        pane.addItem(guiItem, x, y)
+        pane.addItem(GuiItem(item) {
+            if (!isInInputMode()) startChatInput()
+            else player.sendMessage(lang.msg("menu.tag_editor.feedback.already_waiting"))
+        }, 2, 2)
     }
 
-    private fun addPreviewSection(pane: StaticPane, x: Int, y: Int) {
-        val previewTag = inputTag ?: guild.name
-        val previewItem = ItemStack.of(Material.PAPER)
+    private fun addStatus(pane: StaticPane) {
+        val count = inputTag?.let(::countVisibleCharacters) ?: 0
+        val item = ItemStack.of(if (validationError == null) Material.LIME_DYE else Material.RED_DYE)
+            .name(
+                when {
+                    count > 32 -> lang.gui("menu.tag_editor.status.too_long")
+                    count > 28 -> lang.gui("menu.tag_editor.status.nearly_full")
+                    else -> lang.gui("menu.tag_editor.status.ok")
+                },
+            )
+            .lore(
+                if (count > 32) lang.gui("menu.tag_editor.status.characters_error", "count" to count)
+                else lang.gui("menu.tag_editor.status.characters", "count" to count),
+            )
+        validationError?.let { item.lore(lang.gui("menu.tag_editor.input.invalid", "error" to GuiTextStyler.style(Component.text(it)))) }
+        pane.addItem(GuiItem(item), 6, 2)
+    }
+
+    private fun addPreview(pane: StaticPane) {
+        val preview = inputTag ?: guild.name
+        val item = ItemStack.of(Material.ITEM_FRAME)
             .name(lang.gui("menu.tag_editor.preview.name"))
             .lore(lang.gui("menu.tag_editor.preview.description"))
 
         if (validationError != null) {
-            // Show error state with unformatted tag
-            previewItem.lore(lang.gui("menu.tag_editor.preview.invalid_message", "player" to player.name, "tag" to previewTag))
+            item.lore(lang.gui("menu.tag_editor.preview.invalid_message", "player" to player.name, "tag" to preview))
                 .lore(lang.gui("menu.tag_editor.preview.invalid"))
         } else {
-            // Show properly formatted tag using MiniMessage
-            val formattedTag = renderFormattedTag(previewTag)
-            previewItem.lore(lang.gui("menu.tag_editor.preview.message", "player" to player.name, "tag" to formattedTag))
-
-            if (inputTag != null && inputTag != currentTag) {
-                previewItem.lore(lang.gui("menu.tag_editor.preview.new"))
-            } else {
-                previewItem.lore(lang.gui("menu.tag_editor.preview.current"))
-            }
+            item.lore(lang.gui("menu.tag_editor.preview.message", "player" to player.name, "tag" to renderFormattedTag(preview)))
+                .lore(
+                    if (inputTag != currentTag) lang.gui("menu.tag_editor.preview.new")
+                    else lang.gui("menu.tag_editor.preview.current"),
+                )
         }
-
-        previewItem.lore(lang.gui("menu.common.blank"))
-            .lore(lang.gui("menu.tag_editor.preview.hint"))
-
-        val guiItem = GuiItem(previewItem) {
-            // Preview only - no click action needed
-        }
-        pane.addItem(guiItem, x, y)
+        pane.addItem(GuiItem(item), 4, 3)
     }
 
-    private fun addSaveButton(pane: StaticPane, x: Int, y: Int) {
-        val saveItem = ItemStack.of(Material.LIME_WOOL)
-            .name(lang.gui("menu.tag_editor.action.save.name"))
-            .lore(lang.gui("menu.tag_editor.action.save.description"))
-
-        // Disable save if there are validation errors
-        if (validationError != null) {
-            saveItem.name(lang.gui("menu.tag_editor.action.save.cannot"))
-                .lore(lang.gui("menu.tag_editor.action.save.fix"))
-        } else if (inputTag == currentTag) {
-            saveItem.name(lang.gui("menu.tag_editor.action.save.no_changes"))
-                .lore(lang.gui("menu.tag_editor.action.save.unchanged"))
-        } else {
-            saveItem.lore(lang.gui("menu.tag_editor.action.save.click"))
-        }
-
-        val guiItem = GuiItem(saveItem) {
-            println("[LumaGuilds] TagEditorMenu: Save button clicked")
-            println("[LumaGuilds] TagEditorMenu: currentTag: '$currentTag', inputTag: '$inputTag'")
-            println("[LumaGuilds] TagEditorMenu: validationError: ${validationError ?: "NONE"}")
-
-            if (validationError != null) {
-                player.sendMessage(lang.msg("menu.tag_editor.feedback.cannot_save", "error" to validationError!!))
-                return@GuiItem
-            }
-
-            if (inputTag == currentTag) {
-                println("[LumaGuilds] TagEditorMenu: No changes detected - inputTag equals currentTag")
-                player.sendMessage(lang.msg("menu.tag_editor.feedback.no_changes"))
-                return@GuiItem
-            }
-
-            println("[LumaGuilds] TagEditorMenu: Changes detected, proceeding with save...")
-
-            // Convert legacy & codes to MiniMessage format before saving
-            val tagToSave = inputTag?.let { ColorCodeUtils.convertLegacyToMiniMessage(it) }
-
-            // Save the tag (now in MiniMessage format)
-            val success = guildService.setTag(guild.id, tagToSave, player.uniqueId)
-            if (success) {
-                // Update local guild object
-                currentTag = tagToSave
-
-                player.sendMessage(lang.msg("menu.tag_editor.feedback.updated"))
-                if (tagToSave != null) {
-                    val displayTag = ColorCodeUtils.renderTagForDisplay(tagToSave)
-                    player.sendMessage(lang.msg("menu.tag_editor.feedback.new_tag", "tag" to displayTag))
-                } else {
-                    player.sendMessage(lang.msg("menu.tag_editor.feedback.cleared_tag"))
-                }
-
-                // Refresh the menu to show updated state
-                open()
-            } else {
-                player.sendMessage(lang.msg("menu.tag_editor.feedback.save_failed"))
-            }
-        }
-        pane.addItem(guiItem, x, y)
+    private fun addSave(pane: StaticPane) {
+        val canSave = validationError == null && inputTag != currentTag
+        val item = ItemStack.of(if (canSave) Material.LIME_WOOL else Material.GRAY_DYE)
+            .name(
+                when {
+                    validationError != null -> lang.gui("menu.tag_editor.action.save.cannot")
+                    inputTag == currentTag -> lang.gui("menu.tag_editor.action.save.no_changes")
+                    else -> lang.gui("menu.tag_editor.action.save.name")
+                },
+            )
+            .lore(
+                when {
+                    validationError != null -> lang.gui("menu.tag_editor.action.save.fix")
+                    inputTag == currentTag -> lang.gui("menu.tag_editor.action.save.unchanged")
+                    else -> lang.gui("menu.tag_editor.action.save.click")
+                },
+            )
+        pane.addItem(GuiItem(item) { saveTag() }, 2, 4)
     }
 
-    private fun addClearButton(pane: StaticPane, x: Int, y: Int) {
-        val clearItem = ItemStack.of(Material.BARRIER)
+    private fun addClear(pane: StaticPane) {
+        val item = ItemStack.of(Material.BARRIER)
             .name(lang.gui("menu.tag_editor.action.clear.name"))
             .lore(lang.gui("menu.tag_editor.action.clear.description"))
             .lore(lang.gui("menu.tag_editor.action.clear.fallback"))
-
-        val guiItem = GuiItem(clearItem) {
+        pane.addItem(GuiItem(item) {
             inputTag = null
             validationError = null
-
             player.sendMessage(lang.msg("menu.tag_editor.feedback.cleared"))
-
-            // Refresh the menu to show updated state
             open()
-        }
-        pane.addItem(guiItem, x, y)
+        }, 4, 4)
     }
 
-    private fun addCancelButton(pane: StaticPane, x: Int, y: Int) {
-        val cancelItem = ItemStack.of(Material.RED_WOOL)
-            .name(lang.gui("menu.tag_editor.action.cancel.name"))
-            .lore(lang.gui("menu.tag_editor.action.cancel.description"))
-
-        if (isInInputMode()) {
-            cancelItem.name(lang.gui("menu.tag_editor.action.cancel.input_name"))
-                .lore(lang.gui("menu.tag_editor.action.cancel.input_description"))
-        }
-
-        val guiItem = GuiItem(cancelItem) {
+    private fun addCancel(pane: StaticPane) {
+        val item = ItemStack.of(Material.RED_WOOL)
+            .name(
+                if (isInInputMode()) lang.gui("menu.tag_editor.action.cancel.input_name")
+                else lang.gui("menu.tag_editor.action.cancel.name"),
+            )
+            .lore(
+                if (isInInputMode()) lang.gui("menu.tag_editor.action.cancel.input_description")
+                else lang.gui("menu.tag_editor.action.cancel.description"),
+            )
+        pane.addItem(GuiItem(item) {
             if (isInInputMode()) {
                 chatInputListener.stopInputMode(player)
                 player.sendMessage(lang.msg("menu.tag_editor.feedback.input_cancelled"))
-                // Reopen menu to refresh state
                 open()
             } else {
-                // Discard changes and return to previous menu
                 menuNavigator.goBack()
             }
+        }, 6, 4)
+    }
+
+    private fun addFooter(pane: StaticPane) {
+        val back = ItemStack.of(Material.ARROW).name(lang.gui("menu.common.item.back.name"))
+        pane.addItem(GuiItem(back) { menuNavigator.goBack() }, 0, 5)
+
+        val home = ItemStack.of(Material.NETHER_STAR).name(lang.gui("menu.control_panel.item.home.name"))
+        pane.addItem(GuiItem(home) {
+            menuNavigator.openMenu(menuFactory.createGuildControlPanelMenu(menuNavigator, player, guild))
+        }, 4, 5)
+
+        val close = ItemStack.of(Material.BARRIER).name(lang.gui("menu.common.item.close.name"))
+        pane.addItem(GuiItem(close) { player.closeInventory() }, 8, 5)
+    }
+
+    private fun saveTag() {
+        validationError?.let {
+            player.sendMessage(lang.msg("menu.tag_editor.feedback.cannot_save", "error" to it))
+            return
         }
-        pane.addItem(guiItem, x, y)
+        if (inputTag == currentTag) {
+            player.sendMessage(lang.msg("menu.tag_editor.feedback.no_changes"))
+            return
+        }
+
+        val tagToSave = inputTag?.let(ColorCodeUtils::convertLegacyToMiniMessage)
+        if (!guildService.setTag(guild.id, tagToSave, player.uniqueId)) {
+            player.sendMessage(lang.msg("menu.tag_editor.feedback.save_failed"))
+            return
+        }
+
+        currentTag = tagToSave
+        inputTag = tagToSave
+        player.sendMessage(lang.msg("menu.tag_editor.feedback.updated"))
+        if (tagToSave != null) {
+            player.sendMessage(lang.msg("menu.tag_editor.feedback.new_tag", "tag" to ColorCodeUtils.renderTagForDisplay(tagToSave)))
+        } else {
+            player.sendMessage(lang.msg("menu.tag_editor.feedback.cleared_tag"))
+        }
+        open()
     }
 
     private fun startChatInput() {
-        println("[LumaGuilds] TagEditorMenu: Starting chat input for player ${player.name}")
-
-
         chatInputListener.startInputMode(player, this)
-
-        // Close the menu when entering input mode
         player.closeInventory()
-
         player.sendMessage(lang.msg("menu.tag_editor.chat.header"))
         player.sendMessage(lang.msg("menu.tag_editor.chat.prompt"))
         player.sendMessage(lang.msg("menu.tag_editor.chat.support"))
@@ -345,96 +263,48 @@ class TagEditorMenu(private val menuNavigator: MenuNavigator, private val player
         player.sendMessage(lang.msg("menu.tag_editor.chat.footer"))
     }
 
-
     private fun validateTag(tag: String): String? {
-        // Length validation
         val visibleChars = countVisibleCharacters(tag)
-        if (visibleChars > 32) {
-            return plainLocale("menu.tag_editor.validation.too_long", "count" to visibleChars)
-        }
+        if (visibleChars > 32) return plainLocale("menu.tag_editor.validation.too_long", "count" to visibleChars)
+        if (tag.trim().isEmpty()) return plainLocale("menu.tag_editor.validation.empty")
+        if (tag.contains("<<") || tag.contains(">>")) return plainLocale("menu.tag_editor.validation.double_brackets")
 
-        if (tag.trim().isEmpty()) {
-            return plainLocale("menu.tag_editor.validation.empty")
-        }
-
-        // MiniMessage format validation
-        // Check for balanced tags
-        val openTags = Regex("<([^/>][^>]*)>").findAll(tag).count()
-        val closeTags = Regex("</[^>]+>").findAll(tag).count()
-
-        // Check for common syntax errors
-        if (tag.contains("<<") || tag.contains(">>")) {
-            return plainLocale("menu.tag_editor.validation.double_brackets")
-        }
-
-        // Reject interactive MiniMessage event tags (click/hover/insertion)
         net.lumalyte.lg.utils.GuildTagValidator.validationFailure(tag, configService.loadConfig().guild.nameFilter)?.let {
             return GuildTagValidationMessages.legacy(lang, it)
         }
 
-        // Try to parse with MiniMessage
-        try {
-            val miniMessage = MiniMessage.miniMessage()
-            miniMessage.deserialize(tag)
-        } catch (e: Exception) {
-            // Menu operation - catching all exceptions to prevent UI failure
-            // Parse the error message to provide helpful feedback
-            val errorMsg = e.message ?: lang.raw("menu.tag_editor.validation.invalid_format")
-            return when {
-                errorMsg.contains("unclosed", ignoreCase = true) ->
-                    plainLocale("menu.tag_editor.validation.unclosed")
-                errorMsg.contains("unknown tag", ignoreCase = true) ->
-                    plainLocale("menu.tag_editor.validation.unknown_tag")
-                errorMsg.contains("invalid", ignoreCase = true) ->
-                    plainLocale("menu.tag_editor.validation.invalid_syntax")
-                else -> plainLocale("menu.tag_editor.validation.format_error", "error" to errorMsg.take(50))
-            }
-        }
-
-        return null
-    }
-
-    private fun countVisibleCharacters(tag: String): Int {
-        return try {
-            // Parse MiniMessage to get the actual formatted component
-            val miniMessage = MiniMessage.miniMessage()
-            val component = miniMessage.deserialize(tag)
-
-            // Convert to plain text to get visible characters only
-            val plainTextSerializer = PlainTextComponentSerializer.plainText()
-            val plainText = plainTextSerializer.serialize(component)
-
-            // Count the actual visible characters
-            plainText.length
-        } catch (e: Exception) {
-            // Menu operation - catching all exceptions to prevent UI failure
-            // Fallback to regex approach if MiniMessage parsing fails
-            val withoutTags = tag
-                .replace(Regex("<[^>]*>"), "")  // Remove all <tag> elements
-                .replace(Regex("&[0-9a-fk-or]"), "")  // Remove legacy color codes
-                .replace(Regex("\u00A7[0-9a-fk-or]"), "")  // Remove section sign color codes
-            withoutTags.length
-        }
-    }
-
-    private fun renderFormattedTag(tag: String): Component {
         return try {
             MiniMessage.miniMessage().deserialize(tag)
+            null
         } catch (e: Exception) {
-            // Menu operation - catching all exceptions to prevent UI failure
-            // Fallback to plain text if MiniMessage parsing fails
-            Component.text(tag)
+            val error = e.message ?: lang.raw("menu.tag_editor.validation.invalid_format")
+            when {
+                error.contains("unclosed", ignoreCase = true) -> plainLocale("menu.tag_editor.validation.unclosed")
+                error.contains("unknown tag", ignoreCase = true) -> plainLocale("menu.tag_editor.validation.unknown_tag")
+                error.contains("invalid", ignoreCase = true) -> plainLocale("menu.tag_editor.validation.invalid_syntax")
+                else -> plainLocale("menu.tag_editor.validation.format_error", "error" to error.take(50))
+            }
         }
     }
+
+    private fun countVisibleCharacters(tag: String): Int = try {
+        PlainTextComponentSerializer.plainText().serialize(MiniMessage.miniMessage().deserialize(tag)).length
+    } catch (_: Exception) {
+        tag.replace(Regex("<[^>]*>"), "")
+            .replace(Regex("&[0-9a-fk-or]", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\u00A7[0-9a-fk-or]", RegexOption.IGNORE_CASE), "")
+            .length
+    }
+
+    private fun renderFormattedTag(tag: String): Component =
+        runCatching { MiniMessage.miniMessage().deserialize(tag) }.getOrElse { Component.text(tag) }
 
     private fun plainLocale(key: String, vararg placeholders: Pair<String, Any?>): String =
         PlainTextComponentSerializer.plainText().serialize(lang.msg(key, *placeholders))
 
     fun setInputTag(tag: String?) {
-        println("[LumaGuilds] TagEditorMenu: setInputTag called with: '$tag'")
         inputTag = tag
-        validationError = if (tag != null) validateTag(tag) else null
-        println("[LumaGuilds] TagEditorMenu: Updated inputTag to: '$inputTag', validationError: ${validationError ?: "NONE"}")
+        validationError = tag?.let(::validateTag)
     }
 
     fun getInputTag(): String? = inputTag
@@ -443,40 +313,23 @@ class TagEditorMenu(private val menuNavigator: MenuNavigator, private val player
 
     override fun passData(data: Any?) {
         guild = data as? Guild ?: return
+        inputInitialized = false
     }
 
-    // ChatInputHandler interface methods
     override fun onChatInput(player: Player, input: String) {
-        println("[LumaGuilds] TagEditorMenu: Received tag input: '$input'")
-
-        // Validate the input
         val error = validateTag(input)
         if (error != null) {
             player.sendMessage(lang.msg("menu.tag_editor.feedback.invalid", "error" to error))
             return
         }
-
-        // Set the input tag
         setInputTag(input)
-
-        // Reopen the menu with the new input
-        Bukkit.getScheduler().runTask(net.lumalyte.lg.common.PluginKeys.getPlugin(), Runnable {
-            open()
-        })
-
-        // Show formatted tag in message
-        val displayTag = ColorCodeUtils.renderTagForDisplay(input)
-        player.sendMessage(lang.msg("menu.tag_editor.feedback.set", "tag" to displayTag))
+        Bukkit.getScheduler().runTask(net.lumalyte.lg.common.PluginKeys.getPlugin(), Runnable { open() })
+        player.sendMessage(lang.msg("menu.tag_editor.feedback.set", "tag" to ColorCodeUtils.renderTagForDisplay(input)))
         player.sendMessage(lang.msg("menu.tag_editor.feedback.save_hint"))
     }
 
     override fun onCancel(player: Player) {
-        println("[LumaGuilds] TagEditorMenu: Player cancelled tag input")   
         player.sendMessage(lang.msg("menu.tag_editor.feedback.input_cancelled"))
-
-        // Reopen the menu without changes
-        Bukkit.getScheduler().runTask(net.lumalyte.lg.common.PluginKeys.getPlugin(), Runnable {
-            open()
-        })
-    }   
+        Bukkit.getScheduler().runTask(net.lumalyte.lg.common.PluginKeys.getPlugin(), Runnable { open() })
+    }
 }
