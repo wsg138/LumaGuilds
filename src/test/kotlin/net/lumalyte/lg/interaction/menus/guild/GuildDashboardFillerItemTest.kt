@@ -23,9 +23,10 @@ internal class GuildDashboardFillerItemTest {
     @Test
     fun `GuildDashboard does not have a fillBackground method`() {
         val methods = GuildDashboard::class.java.declaredMethods.map { it.name }
-        assertFalse(methods.contains("fillBackground")) {
-            "GuildDashboard must not have a fillBackground method. Found: $methods"
-        }
+        assertFalse(
+            methods.contains("fillBackground"),
+            "GuildDashboard must not have a fillBackground method. Found: $methods",
+        )
     }
 
     @Test
@@ -38,9 +39,10 @@ internal class GuildDashboardFillerItemTest {
             .flatMap { it.declaredFields.map { field -> field.name } }
         val allStatics = fields + companionFields
 
-        assertTrue(allStatics.none { it.uppercase().contains("FILLER") }) {
-            "GuildDashboard must not have a FILLER constant. Found: $allStatics"
-        }
+        assertTrue(
+            allStatics.none { it.uppercase().contains("FILLER") },
+            "GuildDashboard must not have a FILLER constant. Found: $allStatics",
+        )
     }
 
     @Test
@@ -58,9 +60,10 @@ internal class GuildDashboardFillerItemTest {
         )
 
         expectedSections.forEach { section ->
-            assertTrue(source.contains("GuildRedesignSectionMenu.Section.$section")) {
-                "Dashboard is missing redesigned section $section"
-            }
+            assertTrue(
+                source.contains("GuildRedesignSectionMenu.Section.$section"),
+                "Dashboard is missing redesigned section $section",
+            )
         }
         assertTrue(source.contains("ChestGui(6"))
         assertTrue(source.contains("addCard(pane"))
