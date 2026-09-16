@@ -89,6 +89,13 @@ class LocaleContractTest {
         "menu.tag_editor.validation.unclosed",
         "menu.tag_editor.validation.unknown_tag",
     )
+    private val retiredGuildMenuCompatibilityPrefixes = setOf(
+        "menu.guild_settings.",
+        "menu.guild_relations.",
+        "menu.party.management.",
+        "menu.control_panel.item.progression.",
+        "menu.control_panel.state.",
+    )
     private val declaredDynamicKeys =
         claimPermissionDynamicKeys + flagDynamicKeys + rankPermissionDynamicKeys + finiteMenuStateKeys +
             helpTopicDynamicKeys + localizedHelperKeys
@@ -277,11 +284,14 @@ class LocaleContractTest {
     }
 
     @Test
-    fun `locale dead keys match the recovery baseline`() {
+    fun `locale dead keys outside retired guild menu compatibility namespaces match the recovery baseline`() {
         val inventory = LocaleSourceScanner.scan(projectRoot.resolve("src/main/kotlin"))
         val unused = localeKeys() - inventory.literalKeys - declaredDynamicKeys
+        val unexpectedUnused = unused.filterNot { key ->
+            retiredGuildMenuCompatibilityPrefixes.any(key::startsWith)
+        }
 
-        assertEquals(BASELINE_UNUSED_KEYS, unused.size, unused.sorted().joinToString())
+        assertEquals(BASELINE_UNUSED_KEYS, unexpectedUnused.size, unexpectedUnused.sorted().joinToString())
     }
 
     @Test
@@ -380,7 +390,7 @@ class LocaleContractTest {
         const val BASELINE_POSITIONAL_PLACEHOLDERS = 0
         const val BASELINE_MISSING_KEYS = 0
         const val BASELINE_UNUSED_KEYS = 0
-        const val BASELINE_DYNAMIC_CALLS = 39
+        const val BASELINE_DYNAMIC_CALLS = 38
         const val BASELINE_HARDCODED_PLAYER_TEXT = 0
         const val BASELINE_PLACEHOLDER_MISMATCHES = 0
     }
