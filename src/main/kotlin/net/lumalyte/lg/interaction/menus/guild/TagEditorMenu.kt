@@ -102,9 +102,12 @@ class TagEditorMenu(
         inputTag?.let { item.lore(lang.gui("menu.tag_editor.input.current", "tag" to renderFormattedTag(it))) }
             ?: item.lore(lang.gui("menu.tag_editor.input.none"))
 
-        validationError?.let { error ->
+        val error = validationError
+        if (error != null) {
             item.lore(lang.gui("menu.tag_editor.input.invalid", "error" to GuiTextStyler.style(Component.text(error))))
-        } ?: if (inputTag != null) item.lore(lang.gui("menu.tag_editor.input.valid"))
+        } else if (inputTag != null) {
+            item.lore(lang.gui("menu.tag_editor.input.valid"))
+        }
 
         item.lore(
             if (isInInputMode()) lang.gui("menu.tag_editor.input.prompt")
