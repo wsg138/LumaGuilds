@@ -24,31 +24,26 @@ internal class GuildRedesignAssetContractTest {
         "lg_redesign_settings.png",
     )
 
-    private val approvedIconRgb = setOf(
-        0x080E14,
-        0x0D181F,
-        0x1F3440,
-        0x2C8B8E,
-        0x3D5362,
-        0x49B5B1,
-        0x526C7C,
-        0x899AA3,
-        0xAA4E4F,
-        0xDCE7EA,
-        0xE6B549,
-        0xF4F8F9,
-        0xF8CC66,
+    private val surfaceNames = listOf(
+        "guild_redesign_bg_home_6_row.png",
+        "guild_redesign_bg_grid_6_row.png",
+        "guild_redesign_bg_list_6_row.png",
+        "guild_redesign_bg_detail_6_row.png",
+        "guild_redesign_bg_danger_6_row.png",
     )
 
     @Test
-    fun `dashboard background has the expected source size`() {
-        val image = read(root.resolve("guild_redesign_bg_6_row.png"))
-        assertEquals(256, image.width)
-        assertEquals(256, image.height)
+    fun `all redesign surfaces have the expected source size`() {
+        surfaceNames.forEach { name ->
+            val image = read(root.resolve(name))
+            assertEquals(256, image.width, "$name must remain 256px wide")
+            assertEquals(256, image.height, "$name must remain 256px high")
+            assertTrue(image.colorModel.hasAlpha(), "$name must remain an RGBA PNG")
+        }
     }
 
     @Test
-    fun `all category symbols are 64px transparent PNGs using the shared palette`() {
+    fun `all category symbols are detailed transparent 64px resource pack icons`() {
         val iconDir = root.resolve("icons")
 
         iconNames.forEach { name ->
@@ -59,26 +54,32 @@ internal class GuildRedesignAssetContractTest {
 
             var transparentPixels = 0
             var visiblePixels = 0
-            val unexpected = linkedSetOf<String>()
-
+            val colors = linkedSetOf<Int>()
             for (y in 0 until image.height) {
                 for (x in 0 until image.width) {
                     val argb = image.getRGB(x, y)
                     val alpha = argb ushr 24 and 0xFF
                     if (alpha == 0) {
                         transparentPixels++
-                        continue
+                    } else {
+                        visiblePixels++
+                        colors += argb and 0xFFFFFF
                     }
-
-                    visiblePixels++
-                    val rgb = argb and 0xFFFFFF
-                    if (rgb !in approvedIconRgb) unexpected += "#%06X".format(rgb)
                 }
             }
 
-            assertTrue(visiblePixels > 0, "$name must contain a visible symbol")
-            assertTrue(transparentPixels > 0, "$name must not contain a baked full-card background")
-            assertTrue(unexpected.isEmpty(), "$name contains colors outside the shared UI palette: $unexpected")
+            val total = image.width * image.height
+            val coverage = visiblePixels.toDouble() / total
+            assertTrue(visiblePixels > 0, "$name must contain a visible Minecraft-style symbol")
+            assertTrue(transparentPixels > total / 4, "$name must leave substantial transparency; panels belong to the background")
+            assertTrue(coverage in 0.08..0.72, "$name visible coverage $coverage is outside the icon-system range")
+            assertTrue(colors.size >= 4, "$name is too flat; V3 icons require material shading/detail")
+            assertTrue(colors.size <= 96, "$name has too many colors for coherent pixel-art treatment (${colors.size})")
+
+            listOf(0 to 0, 63 to 0, 0 to 63, 63 to 63).forEach { (x, y) ->
+                val alpha = image.getRGB(x, y) ushr 24 and 0xFF
+                assertEquals(0, alpha, "$name must keep transparent corners instead of baking in a card")
+            }
         }
     }
 
