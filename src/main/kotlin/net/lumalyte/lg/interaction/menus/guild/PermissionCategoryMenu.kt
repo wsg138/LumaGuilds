@@ -92,6 +92,7 @@ class PermissionCategoryMenu(
             val enabled = permission in modifiedPermissions
             val permissionKey = "permission.${permission.name.lowercase().replace("_", ".")}"
             val displayName = lang.gui(permissionKey)
+            val chatDisplayName = lang.raw(permissionKey)
             val item = ItemStack.of(if (enabled) Material.LIME_STAINED_GLASS_PANE else Material.RED_STAINED_GLASS_PANE)
                 .name(if (enabled) {
                     lang.gui("menu.rank_edit.category.permission_enabled", "permission" to displayName)
@@ -106,7 +107,13 @@ class PermissionCategoryMenu(
             if (y <= 4) {
                 pane.addItem(GuiItem(item) {
                     if (guardSelfEdit()) return@GuiItem
-                    if (enabled) modifiedPermissions.remove(permission) else modifiedPermissions.add(permission)
+                    if (enabled) {
+                        modifiedPermissions.remove(permission)
+                        player.sendMessage(lang.msg("menu.permission_category.feedback.disabled", "permission" to chatDisplayName, "rank" to rank.name))
+                    } else {
+                        modifiedPermissions.add(permission)
+                        player.sendMessage(lang.msg("menu.permission_category.feedback.enabled", "permission" to chatDisplayName, "rank" to rank.name))
+                    }
                     open()
                 }, x, y)
             }
