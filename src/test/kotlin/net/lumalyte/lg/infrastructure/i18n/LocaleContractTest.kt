@@ -89,10 +89,21 @@ class LocaleContractTest {
         "menu.tag_editor.validation.unclosed",
         "menu.tag_editor.validation.unknown_tag",
     )
+    /**
+     * The redesign intentionally replaces these complete legacy menu surfaces. Keeping their old
+     * locale keys temporarily is deliberate compatibility while downstream servers and Bedrock
+     * forms finish moving to the shared UI system. This is scoped by namespace rather than by a
+     * global non-zero dead-key baseline, so unrelated dead locale keys still fail the contract.
+     */
     private val retiredGuildMenuCompatibilityPrefixes = setOf(
         "menu.guild_settings.",
         "menu.guild_relations.",
         "menu.party.management.",
+        "menu.guild_home.",
+        "menu.member_management.",
+        "menu.rank_management.",
+        "menu.rank_edit.",
+        "menu.permission_category.",
         "menu.control_panel.item.progression.",
         "menu.control_panel.state.",
     )
@@ -226,6 +237,13 @@ class LocaleContractTest {
             permissionKeys + flagKeys + rankPermissionKeys + expectedMenuStateKeys + expectedHelpTopicKeys + localizedHelperKeys,
             declaredDynamicKeys,
         )
+    }
+
+    @Test
+    fun `help topic localization keys exist in the locale`() {
+        val missing = helpTopicDynamicKeys - localeKeys()
+
+        assertEquals(emptySet<String>(), missing, missing.sorted().joinToString())
     }
 
     @Test
@@ -390,7 +408,7 @@ class LocaleContractTest {
         const val BASELINE_POSITIONAL_PLACEHOLDERS = 0
         const val BASELINE_MISSING_KEYS = 0
         const val BASELINE_UNUSED_KEYS = 0
-        const val BASELINE_DYNAMIC_CALLS = 38
+        const val BASELINE_DYNAMIC_CALLS = 39
         const val BASELINE_HARDCODED_PLAYER_TEXT = 0
         const val BASELINE_PLACEHOLDER_MISMATCHES = 0
     }
