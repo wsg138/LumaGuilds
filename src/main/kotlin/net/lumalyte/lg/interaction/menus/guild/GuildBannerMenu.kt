@@ -346,7 +346,7 @@ class GuildBannerMenu(
         return true
     }
 
-    private fun payFromGuild(physicalCost: Long, virtualCost: Long): Boolean {
+    private fun payFromGuild(physicalCost: Int, virtualCost: Int): Boolean {
         if (physicalCurrencyService.isPhysicalCurrencyEnabled()) {
             val currentBalance = physicalCurrencyService.calculateVaultCurrencyValue(guild)
             if (currentBalance < physicalCost) {
@@ -382,9 +382,9 @@ class GuildBannerMenu(
         return bankService.deductFromGuildBank(guild.id, totalCost, "Banner copy purchase")
     }
 
-    private fun payFromPlayer(cost: Long): Boolean {
+    private fun payFromPlayer(cost: Int): Boolean {
         val playerBalance = bankService.getPlayerBalance(player.uniqueId)
-        if (playerBalance < cost.toInt()) {
+        if (playerBalance < cost) {
             player.sendMessage(
                 lang.msg(
                     "menu.guild_banner.feedback.insufficient_coins",
