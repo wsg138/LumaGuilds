@@ -192,4 +192,8 @@ private fun retainedGuildMenuLocaleContracts(lang: LangService) {
     lang.gui("menu.permission_category.action.reset.click")
     lang.msg("menu.permission_category.feedback.reset", "category" to "Category")
     lang.gui("menu.permission_category.action.back.saved")
+
+    // Keep the former rank-list dynamic permission lookup represented in the recovery contract.
+    val retainedPermissionKey = "permission.manage.ranks"
+    lang.raw(retainedPermissionKey)
 }
