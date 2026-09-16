@@ -166,7 +166,7 @@ class DescriptionEditorMenu(
         val back = ItemStack.of(Material.ARROW).name(lang.gui("menu.common.item.back.name"))
         pane.addItem(GuiItem(back) { menuNavigator.goBack() }, 0, 5)
 
-        val home = ItemStack.of(Material.NETHER_STAR).name(lang.gui("menu.common.item.home.name"))
+        val home = ItemStack.of(Material.NETHER_STAR).name(lang.gui("menu.control_panel.item.home.name"))
         pane.addItem(GuiItem(home) {
             menuNavigator.openMenu(menuFactory.createGuildControlPanelMenu(menuNavigator, player, guild))
         }, 4, 5)
