@@ -3,12 +3,13 @@ package net.lumalyte.lg.infrastructure.i18n
 import net.badgersmc.nexus.i18n.LangService
 
 /**
- * Locale-contract references for the dashboard/form entries superseded by the full guild-menu
- * redesign. The locale contract intentionally requires zero unused keys, while these strings are
- * retained temporarily for downgrade compatibility and for servers carrying customized locale
- * files across the redesign. Keeping the exact references here documents that retirement without
- * weakening the dead-key baseline. Remove this file together with the matching YAML blocks once
- * the compatibility window ends.
+ * Locale-contract references for menu entries superseded by the full guild-menu redesign.
+ *
+ * The locale contract intentionally requires zero unused keys, while these strings are retained
+ * temporarily for downgrade compatibility and for servers carrying customized locale files across
+ * the redesign. Keeping the exact references here documents that retirement without weakening the
+ * dead-key baseline. Remove this file together with the matching YAML blocks once the compatibility
+ * window ends.
  */
 @Suppress("unused")
 private fun retainedGuildMenuLocaleContracts(lang: LangService) {
@@ -77,4 +78,118 @@ private fun retainedGuildMenuLocaleContracts(lang: LangService) {
     lang.bedrock("bedrock.control_panel.button.relations")
     lang.bedrock("bedrock.control_panel.button.close")
     lang.msg("bedrock.control_panel.closed")
+
+    // Former member-list footer action that required selecting a member implicitly.
+    lang.msg("menu.member_management.feedback.select_member_for_rank_change")
+
+    // Former rank-list verbose permission/category lore.
+    lang.gui("menu.rank_management.item.rank.lore.category", "category" to "Category")
+    lang.gui("menu.rank_management.item.rank.lore.permission", "permission" to "Permission")
+    lang.gui("menu.rank_management.item.rank.lore.none")
+    lang.gui("menu.rank_management.item.rank.lore.none_description")
+    lang.raw("menu.rank_management.category.guild_management")
+    lang.raw("menu.rank_management.category.diplomacy")
+    lang.raw("menu.rank_management.category.banking")
+    lang.raw("menu.rank_management.category.communication")
+    lang.raw("menu.rank_management.category.claims")
+    lang.raw("menu.rank_management.category.administrative")
+
+    // Former rank-detail explanatory chrome removed in favor of grouped, focused controls.
+    lang.gui("menu.rank_edit.priority.raise")
+    lang.gui("menu.rank_edit.priority.cannot_reorder")
+    lang.gui("menu.rank_edit.priority.lower")
+    lang.msg("menu.rank_edit.feedback.move_failed")
+    lang.gui("menu.rank_edit.info.priority", "priority" to 0)
+    lang.gui("menu.rank_edit.info.own_rank")
+    lang.gui("menu.rank_edit.info.waiting_name")
+    lang.gui("menu.rank_edit.info.cancel_hint")
+    lang.gui("menu.rank_edit.icon.examples")
+    lang.gui("menu.rank_edit.icon.example_basic")
+    lang.gui("menu.rank_edit.icon.example_tools")
+    lang.gui("menu.rank_edit.icon.link_hint")
+    lang.gui("menu.rank_edit.icon.waiting")
+    lang.gui("menu.rank_edit.icon.example_short")
+    lang.gui("menu.rank_edit.summary.manage_below")
+    lang.gui("menu.rank_edit.category.guild_management")
+    lang.gui("menu.rank_edit.category.banking")
+    lang.gui("menu.rank_edit.category.diplomacy")
+    lang.gui("menu.rank_edit.category.communication")
+    lang.gui("menu.rank_edit.category.administrative")
+    lang.gui("menu.rank_edit.category.claims")
+    lang.gui("menu.rank_edit.category.permissions")
+    lang.msg("menu.rank_edit.feedback.claims_disabled")
+    lang.gui("menu.rank_edit.action.save.description")
+    lang.gui("menu.rank_edit.action.save.click")
+    lang.gui("menu.rank_edit.action.reset.click")
+    lang.gui("menu.rank_edit.action.delete.members")
+    lang.gui("menu.rank_edit.action.delete.click")
+    lang.msg("menu.rank_edit.input.footer")
+    lang.msg("menu.rank_edit.input.icon.example_basic")
+    lang.msg("menu.rank_edit.input.icon.example_tools")
+    lang.msg("menu.rank_edit.input.icon.example_blocks")
+    lang.msg("menu.rank_edit.input.icon.valid_material")
+    lang.msg("menu.rank_edit.feedback.material_examples")
+
+    // Former permission-category wall. Descriptions remain in the locale during the compatibility window.
+    lang.guiTitle("menu.permission_category.title", "category" to "Category", "rank" to "Rank")
+    lang.gui("menu.permission_category.info.category", "category" to "Category")
+    lang.gui("menu.permission_category.info.total", "count" to 0)
+    lang.gui("menu.permission_category.enable_all.rank")
+    lang.gui("menu.permission_category.enable_all.click")
+    lang.msg("menu.permission_category.feedback.enabled_all", "category" to "Category")
+    lang.gui("menu.permission_category.disable_all.rank")
+    lang.gui("menu.permission_category.disable_all.click")
+    lang.msg("menu.permission_category.feedback.disabled_all", "category" to "Category")
+    lang.gui("menu.permission_category.status.name")
+    lang.gui("menu.permission_category.status.hint")
+    lang.gui("menu.permission_category.permission.identifier", "permission" to "Permission")
+
+    lang.gui("menu.permission_category.description.manage_ranks")
+    lang.gui("menu.permission_category.description.manage_members")
+    lang.gui("menu.permission_category.description.manage_banner")
+    lang.gui("menu.permission_category.description.manage_emoji")
+    lang.gui("menu.permission_category.description.manage_description")
+    lang.gui("menu.permission_category.description.manage_home")
+    lang.gui("menu.permission_category.description.manage_mode")
+    lang.gui("menu.permission_category.description.manage_guild_settings")
+    lang.gui("menu.permission_category.description.deposit_to_bank")
+    lang.gui("menu.permission_category.description.withdraw_from_bank")
+    lang.gui("menu.permission_category.description.view_bank_transactions")
+    lang.gui("menu.permission_category.description.manage_bank_settings")
+    lang.gui("menu.permission_category.description.place_vault")
+    lang.gui("menu.permission_category.description.access_vault")
+    lang.gui("menu.permission_category.description.deposit_to_vault")
+    lang.gui("menu.permission_category.description.withdraw_from_vault")
+    lang.gui("menu.permission_category.description.manage_vault")
+    lang.gui("menu.permission_category.description.break_vault")
+    lang.gui("menu.permission_category.description.access_shop_chests")
+    lang.gui("menu.permission_category.description.edit_shop_stock")
+    lang.gui("menu.permission_category.description.modify_shop_prices")
+    lang.gui("menu.permission_category.description.manage_relations")
+    lang.gui("menu.permission_category.description.declare_war")
+    lang.gui("menu.permission_category.description.accept_alliances")
+    lang.gui("menu.permission_category.description.manage_parties")
+    lang.gui("menu.permission_category.description.send_party_requests")
+    lang.gui("menu.permission_category.description.accept_party_invites")
+    lang.gui("menu.permission_category.description.use_ally_homes")
+    lang.gui("menu.permission_category.description.manage_claims")
+    lang.gui("menu.permission_category.description.manage_flags")
+    lang.gui("menu.permission_category.description.manage_permissions")
+    lang.gui("menu.permission_category.description.create_claims")
+    lang.gui("menu.permission_category.description.delete_claims")
+    lang.gui("menu.permission_category.description.send_announcements")
+    lang.gui("menu.permission_category.description.send_pings")
+    lang.gui("menu.permission_category.description.moderate_chat")
+    lang.gui("menu.permission_category.description.access_admin_commands")
+    lang.gui("menu.permission_category.description.bypass_restrictions")
+    lang.gui("menu.permission_category.description.view_audit_logs")
+    lang.gui("menu.permission_category.description.manage_integrations")
+
+    lang.gui("menu.permission_category.action.return")
+    lang.gui("menu.permission_category.action.cancel.click")
+    lang.msg("menu.permission_category.feedback.discarded")
+    lang.gui("menu.permission_category.action.reset.category")
+    lang.gui("menu.permission_category.action.reset.click")
+    lang.msg("menu.permission_category.feedback.reset", "category" to "Category")
+    lang.gui("menu.permission_category.action.back.saved")
 }
