@@ -117,16 +117,16 @@ class GuildDashboard(
         )
         pane.addItem(GuiItem(rankItem), 5, 0)
 
-        val alert = NexoItemProvider.getItemStackOrFallback("lg_redesign_alert") { ItemStack.of(Material.BELL) }
+        val activity = ItemStack.of(Material.BELL)
         GuildRedesignSectionMenu.setMeta(
-            alert,
+            activity,
             Component.text("Guild Activity", NamedTextColor.YELLOW),
             listOf(
                 Component.text("Requests, quests and wars are surfaced", NamedTextColor.GRAY),
                 Component.text("inside their matching task sections.", NamedTextColor.GRAY),
             ),
         )
-        pane.addItem(GuiItem(alert), 8, 0)
+        pane.addItem(GuiItem(activity), 8, 0)
     }
 
     private fun addCard(pane: StaticPane, x: Int, y: Int, section: GuildRedesignSectionMenu.Section) {
@@ -197,7 +197,7 @@ class GuildDashboard(
         )
         pane.addItem(GuiItem(guide), 4, 5)
 
-        val close = NexoItemProvider.getItemStackOrFallback("lg_redesign_close") { ItemStack.of(Material.BARRIER) }
+        val close = ItemStack.of(Material.BARRIER)
         GuildRedesignSectionMenu.setMeta(close, Component.text("Close", NamedTextColor.RED), emptyList())
         pane.addItem(GuiItem(close) { player.closeInventory() }, 8, 5)
     }
