@@ -14,11 +14,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    # Single source of truth: cache key + build step both read this (see build.yml).
     env:
-      ROSECHAT_PREHOOK_REF: 3fe078a   # last RoseChat commit before the LumaGuilds hook
-      PLAYTIME_API_REF: 2a5b57d       # wsg138/PlayTimePlugin commit the API jar is built from
-      COMBATLOGX_API_REF: 4812e85af1264ebb27da481b9d9cbf8de0956e53 # last complete 11.6 API source tree
+      ROSECHAT_PREHOOK_REF: 3fe078a
+      PLAYTIME_API_REF: 2a5b57d
+      COMBATLOGX_API_REF: 4812e85af1264ebb27da481b9d9cbf8de0956e53
 
     permissions:
       contents: read
@@ -27,20 +26,16 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
-      
+
     - name: Setup JDK 21
       uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'temurin'
 
-    # See build.yml: RoseChat master carries a LumaGuilds hook that needs the
-    # LumaGuilds jar, so build RoseChat at the last PRE-HOOK commit to break the
-    # circular compile dependency. Keep ROSECHAT_PREHOOK_REF in sync with build.yml
-    # and EnthusiaMarket's CI.
     - name: Cache RoseChat jar
       id: rosechat-cache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: libs/RoseChat-RC-2.jar
         key: rosechat-jar-prehook-${{ env.ROSECHAT_PREHOOK_REF }}
@@ -57,13 +52,9 @@ jobs:
         ROSE_JAR=$(ls build/libs/RoseChat-RC-2*.jar | grep -v -- '-sources\|-javadoc' | head -1)
         cp "$ROSE_JAR" "$GITHUB_WORKSPACE/libs/RoseChat-RC-2.jar"
 
-    # EnthusiaPlaytime is a Maven project; compiling its API classes directly is
-    # faster and more deterministic than a Maven build. The API surface (service
-    # interface + state enums + model POJOs) is pure java.util, so plain javac
-    # needs no external dependencies. Keep PLAYTIME_API_REF in sync with build.yml.
     - name: Cache EnthusiaPlaytime API jar
       id: playtime-cache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: libs/EnthusiaPlaytime-api.jar
         key: playtime-api-${{ env.PLAYTIME_API_REF }}
@@ -84,12 +75,9 @@ jobs:
           src/main/java/org/enthusia/playtime/data/model/RangeTotals.java
         jar cf "$GITHUB_WORKSPACE/libs/EnthusiaPlaytime-api.jar" -C /tmp/playtime-classes .
 
-    # CombatLogX publishes a mutable 11.6-SNAPSHOT that can disappear from its
-    # Maven repository. Build the same API version from a pinned source commit
-    # so clean CI runners do not depend on stale local Maven metadata.
     - name: Cache CombatLogX API jar
       id: combatlogx-cache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: libs/CombatLogX-api.jar
         key: combatlogx-api-${{ env.COMBATLOGX_API_REF }}
@@ -112,3 +100,24 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: ./gradlew test
+
+    # The preview PR is intentionally testable in-game without requiring a local build.
+    # This extra packaging is harmless on normal PRs; the Nexo directory simply will not exist.
+    - name: Build plugin jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: ./gradlew shadowJar
+
+    - name: Upload Guild Home preview bundle
+      if: ${{ hashFiles('menu-redesign/nexo/**') != '' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: LumaGuilds-Guild-Home-Preview
+        path: |
+          build/libs/*.jar
+          !build/libs/*-sources.jar
+          !build/libs/*-javadoc.jar
+          menu-redesign/nexo/**
+          menu-redesign/HOME_PREVIEW_SCOPE.md
+        if-no-files-found: error
+        retention-days: 7
