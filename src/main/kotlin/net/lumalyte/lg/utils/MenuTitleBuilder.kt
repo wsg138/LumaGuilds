@@ -22,9 +22,15 @@ object MenuTitleBuilder {
     private const val REWIND_TO_TITLE = "<shift:-161>"
 
     /**
-     * Legacy themed background support retained while older menus are migrated.
+     * Compatibility path for screens still being structurally migrated.
+     *
+     * Six-row guild inventories inherit the shared redesign frame immediately so navigating from a
+     * redesigned hub never drops the player back into an unrelated legacy visual theme. Smaller
+     * inventories retain their exact legacy-sized glyph until their layout is converted to one of
+     * the fixed six-row redesign surfaces.
      */
     fun build(theme: GuiTheme = GuiTheme.NEUTRAL, rows: Int, title: String = ""): String {
+        if (rows == 6) return compose(MenuSurface.GRID.glyphKey, title)
         val themeKey = theme.name.lowercase()
         val glyphName = "guild_bg_${themeKey}_${rows}_row"
         return compose(glyphName, title)
