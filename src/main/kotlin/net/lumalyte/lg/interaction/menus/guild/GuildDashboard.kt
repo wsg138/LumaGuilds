@@ -21,16 +21,7 @@ import org.bukkit.inventory.ItemStack
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-/**
- * Focused Guild Home redesign preview.
- *
- * The background owns the frame and eight 2x2 card wells. Nexo items are transparent Minecraft-
- * themed symbols rendered oversized inside those wells; invisible neighboring hitboxes make each
- * apparent card clickable without baking a separate frame into every icon.
- *
- * This preview intentionally leaves the deeper feature screens on their existing implementations
- * so the home page can be judged in isolation before the full menu migration continues.
- */
+/** Focused, six-row Guild Home visual/navigation preview. */
 class GuildDashboard(
     private val menuNavigator: MenuNavigator,
     private val player: Player,
@@ -64,7 +55,6 @@ class GuildDashboard(
             menuNavigator.goBack()
             return
         }
-
         guild = guildService.getGuild(guild.id) ?: run {
             player.sendMessage(lang.msg("menu.dashboard.feedback.guild_missing"))
             menuNavigator.goBack()
@@ -77,14 +67,9 @@ class GuildDashboard(
         gui.addPane(pane)
 
         addHeader(pane)
-
-        val cards = Card.entries
-        cards.forEachIndexed { index, card ->
-            val x = (index % 4) * 2
-            val y = if (index < 4) 1 else 3
-            addCard(pane, x, y, card)
+        Card.entries.forEachIndexed { index, card ->
+            addCard(pane, (index % 4) * 2, if (index < 4) 1 else 3, card)
         }
-
         addFooter(pane)
         gui.show(player)
     }
@@ -95,56 +80,28 @@ class GuildDashboard(
         val emoji = guildService.getEmoji(guild.id)
         val displayName = if (emoji.isNullOrBlank()) guild.name else "$emoji ${guild.name}"
 
-        val identity = ItemStack.of(Material.BELL)
-        setMeta(
-            identity,
-            Component.text(displayName, NamedTextColor.GOLD),
-            listOf(
-                Component.text("Guild Home", NamedTextColor.AQUA),
-                Component.text("Everything important starts here.", NamedTextColor.GRAY),
-            ),
-        )
-        pane.addItem(GuiItem(identity), 0, 0)
+        pane.addItem(GuiItem(item(Material.BELL, displayName, NamedTextColor.GOLD,
+            "Guild Home" to NamedTextColor.AQUA,
+            "Everything important starts here." to NamedTextColor.GRAY)), 0, 0)
 
-        val memberItem = ItemStack.of(Material.PLAYER_HEAD)
-        setMeta(
-            memberItem,
-            Component.text("$members Members", NamedTextColor.WHITE),
-            listOf(Component.text("Open Members & Ranks below", NamedTextColor.GRAY)),
-        )
-        pane.addItem(GuiItem(memberItem), 3, 0)
+        pane.addItem(GuiItem(item(Material.PLAYER_HEAD, "$members Members", NamedTextColor.WHITE,
+            "Open Members & Ranks below" to NamedTextColor.GRAY)), 3, 0)
 
-        val rankItem = ItemStack.of(Material.GOLDEN_HELMET)
-        setMeta(
-            rankItem,
-            Component.text(rank?.name ?: "Member", NamedTextColor.GOLD),
-            listOf(Component.text("Your guild rank", NamedTextColor.GRAY)),
-        )
-        pane.addItem(GuiItem(rankItem), 5, 0)
+        pane.addItem(GuiItem(item(Material.GOLDEN_HELMET, rank?.name ?: "Member", NamedTextColor.GOLD,
+            "Your guild rank" to NamedTextColor.GRAY)), 5, 0)
 
-        val bankItem = ItemStack.of(Material.GOLD_INGOT)
-        setMeta(
-            bankItem,
-            Component.text("Guild Bank", NamedTextColor.YELLOW),
-            listOf(
-                Component.text(guild.bankBalance.toString(), NamedTextColor.WHITE),
-                Component.text("Open Money & Vault below", NamedTextColor.GRAY),
-            ),
-        )
-        pane.addItem(GuiItem(bankItem), 8, 0)
+        pane.addItem(GuiItem(item(Material.GOLD_INGOT, "Guild Bank", NamedTextColor.YELLOW,
+            guild.bankBalance.toString() to NamedTextColor.WHITE,
+            "Open Money & Vault below" to NamedTextColor.GRAY)), 8, 0)
     }
 
     private fun addCard(pane: StaticPane, x: Int, y: Int, card: Card) {
         val icon = NexoItemProvider.getItemStackOrFallback(card.iconId) { ItemStack.of(card.fallback) }
-        setMeta(
-            icon,
-            Component.text(card.title, NamedTextColor.WHITE),
-            listOf(
-                Component.text(card.summary, NamedTextColor.GRAY),
-                Component.empty(),
-                Component.text("Click to open", NamedTextColor.AQUA),
-            ),
-        )
+        setMeta(icon, Component.text(card.title, NamedTextColor.WHITE), listOf(
+            Component.text(card.summary, NamedTextColor.GRAY),
+            Component.empty(),
+            Component.text("Click to open", NamedTextColor.AQUA),
+        ))
 
         val action: () -> Unit = {
             when (card) {
@@ -160,7 +117,6 @@ class GuildDashboard(
         }
 
         pane.addItem(GuiItem(icon) { action() }, x, y)
-
         if (NexoItemProvider.isAvailable()) {
             listOf(x + 1 to y, x to y + 1, x + 1 to y + 1).forEach { (hitboxX, hitboxY) ->
                 val hitbox = NexoItemProvider.getItemStack("lg_redesign_hitbox") ?: return@forEach
@@ -171,35 +127,28 @@ class GuildDashboard(
     }
 
     private fun addFooter(pane: StaticPane) {
-        val info = ItemStack.of(Material.KNOWLEDGE_BOOK)
-        setMeta(
-            info,
-            Component.text("Guild Information", NamedTextColor.YELLOW),
-            listOf(
-                Component.text("View the guild overview and public details", NamedTextColor.GRAY),
-                Component.empty(),
-                Component.text("Click to open", NamedTextColor.AQUA),
-            ),
-        )
+        val info = item(Material.KNOWLEDGE_BOOK, "Guild Information", NamedTextColor.YELLOW,
+            "View the guild overview and public details" to NamedTextColor.GRAY,
+            "Click to open" to NamedTextColor.AQUA)
         pane.addItem(GuiItem(info) {
             menuNavigator.openMenu(menuFactory.createGuildInfoMenu(menuNavigator, player, guild))
         }, 0, 5)
 
-        val guide = ItemStack.of(Material.BOOK)
-        setMeta(
-            guide,
-            Component.text("Eight simple starting points", NamedTextColor.AQUA),
-            listOf(
-                Component.text("Pick what you want to do instead of", NamedTextColor.GRAY),
-                Component.text("memorizing commands or plugin terminology.", NamedTextColor.GRAY),
-                Component.text("Hover any icon for a short explanation.", NamedTextColor.DARK_GRAY),
-            ),
-        )
-        pane.addItem(GuiItem(guide), 4, 5)
+        pane.addItem(GuiItem(item(Material.BOOK, "Eight simple starting points", NamedTextColor.AQUA,
+            "Pick what you want to do instead of memorizing commands." to NamedTextColor.GRAY,
+            "Hover any icon for a short explanation." to NamedTextColor.DARK_GRAY)), 4, 5)
 
-        val close = ItemStack.of(Material.BARRIER)
-        setMeta(close, Component.text("Close", NamedTextColor.RED), emptyList())
+        val close = item(Material.BARRIER, "Close", NamedTextColor.RED)
         pane.addItem(GuiItem(close) { player.closeInventory() }, 8, 5)
+    }
+
+    private fun item(
+        material: Material,
+        name: String,
+        nameColor: NamedTextColor,
+        vararg lore: Pair<String, NamedTextColor>,
+    ): ItemStack = ItemStack.of(material).also {
+        setMeta(it, Component.text(name, nameColor), lore.map { (text, color) -> Component.text(text, color) })
     }
 
     private fun redesignTitle(title: String): String =
@@ -213,20 +162,42 @@ class GuildDashboard(
     }
 
     /**
-     * Temporary preview-branch compatibility references. The focused preview uses new English card
-     * labels, but the normal dashboard locale entries remain part of the production locale contract.
-     * Keeping the references here avoids deleting translations just to test this one screen.
+     * Preview-only references for the existing dashboard translations. They remain explicit so the
+     * strict locale scanner can verify every retained key while the visual prototype uses temporary
+     * English card copy. Delete this compatibility block when the final copy is localized.
      */
     @Suppress("unused")
     private fun retainDashboardLocaleReferences() {
-        listOf(
-            "information", "members", "ranks", "quests", "economy",
-            "settings", "progression", "diplomacy", "warfare", "statistics",
-        ).forEach { key ->
-            lang.gui("menu.dashboard.item.$key.name")
-            lang.gui("menu.dashboard.item.$key.lore.line_1")
-            lang.gui("menu.dashboard.item.$key.lore.line_2")
-        }
+        lang.gui("menu.dashboard.item.information.name")
+        lang.gui("menu.dashboard.item.information.lore.line_1")
+        lang.gui("menu.dashboard.item.information.lore.line_2")
+        lang.gui("menu.dashboard.item.members.name")
+        lang.gui("menu.dashboard.item.members.lore.line_1")
+        lang.gui("menu.dashboard.item.members.lore.line_2")
+        lang.gui("menu.dashboard.item.ranks.name")
+        lang.gui("menu.dashboard.item.ranks.lore.line_1")
+        lang.gui("menu.dashboard.item.ranks.lore.line_2")
+        lang.gui("menu.dashboard.item.quests.name")
+        lang.gui("menu.dashboard.item.quests.lore.line_1")
+        lang.gui("menu.dashboard.item.quests.lore.line_2")
+        lang.gui("menu.dashboard.item.economy.name")
+        lang.gui("menu.dashboard.item.economy.lore.line_1")
+        lang.gui("menu.dashboard.item.economy.lore.line_2")
+        lang.gui("menu.dashboard.item.settings.name")
+        lang.gui("menu.dashboard.item.settings.lore.line_1")
+        lang.gui("menu.dashboard.item.settings.lore.line_2")
+        lang.gui("menu.dashboard.item.progression.name")
+        lang.gui("menu.dashboard.item.progression.lore.line_1")
+        lang.gui("menu.dashboard.item.progression.lore.line_2")
+        lang.gui("menu.dashboard.item.diplomacy.name")
+        lang.gui("menu.dashboard.item.diplomacy.lore.line_1")
+        lang.gui("menu.dashboard.item.diplomacy.lore.line_2")
+        lang.gui("menu.dashboard.item.warfare.name")
+        lang.gui("menu.dashboard.item.warfare.lore.line_1")
+        lang.gui("menu.dashboard.item.warfare.lore.line_2")
+        lang.gui("menu.dashboard.item.statistics.name")
+        lang.gui("menu.dashboard.item.statistics.lore.line_1")
+        lang.gui("menu.dashboard.item.statistics.lore.line_2")
         lang.gui("menu.dashboard.item.guild_info.name", "display_name" to guild.name)
         lang.gui("menu.dashboard.item.guild_info.lore.members", "member_count" to 0)
         lang.gui("menu.dashboard.item.guild_info.lore.ranks", "rank_count" to 0)
