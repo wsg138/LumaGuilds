@@ -1,57 +1,53 @@
 package net.lumalyte.lg.utils
 
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+
 /**
- * Builds ChestGui titles that use Nexo font-glyph overlays for
- * themed guild-menu backgrounds.
+ * Shared visual surfaces for the LumaGuilds redesign.
  *
- * The themed PNGs have their artwork at canvas origin (0,0) within
- * a 256x256 transparent canvas. The content measures 176 pixels
- * wide x rowHeight tall.
- *
- * Title component structure:
- *
- *   <shift:-9>                    calibrated horizontal offset
- *   <glyph:guild_bg_<theme>_<R>>  background overlay (advances cursor ~256px)
- *   <shift:-161>                  rewind ~80px less — title lands at ~x=86
- *   <title>                       visible title text in the top bar
- *
- * The rewind value of -161 advances the cursor ~80px into the title bar:
- *   D - 9 + 256 - 161 = D + 86
- *   where D = default cursor start, 256 = glyph texture width
- *
- * DO NOT use the neutral theme as a positioning reference — its
- * assets are oversized and are being corrected separately.
- *
- * Glyph naming: guild_bg_<theme>_<rows>_row
+ * Every redesigned screen belongs to one of these families instead of inventing its own layout.
  */
+enum class MenuSurface(val glyphKey: String) {
+    HOME("guild_redesign_bg_home_6_row"),
+    GRID("guild_redesign_bg_grid_6_row"),
+    LIST("guild_redesign_bg_list_6_row"),
+    DETAIL("guild_redesign_bg_detail_6_row"),
+    DANGER("guild_redesign_bg_danger_6_row"),
+}
+
+/** Builds ChestGui titles backed by Nexo font-glyph overlays. */
 object MenuTitleBuilder {
-
-    /** Calibrated horizontal offset placing the glyph at the window origin. */
-    private const val HORIZONTAL_OFFSET: String = "<shift:-9>"
-
-    /** Rewind past the 256-pixel glyph advance, landing title ~86px from default start. */
-    private const val REWIND_TO_TITLE: String = "<shift:-161>"
+    private const val HORIZONTAL_OFFSET = "<shift:-9>"
+    private const val REWIND_TO_TITLE = "<shift:-161>"
 
     /**
-     * Returns a ChestGui title string that renders a Nexo font-glyph
-     * background with an optional visible title in the top bar.
+     * Compatibility path for screens still being structurally migrated.
      *
-     * Result:
-     *   <shift:-9><glyph:guild_bg_<theme>_<R>_row><shift:-161><title>
-     *
-     * @param theme  GUI background theme (default: NEUTRAL)
-     * @param rows   Inventory row count (3-6)
-     * @param title  Optional visible title text (default: empty = no title)
-     * @return       Title string for the ChestGui constructor.
+     * Six-row guild inventories inherit the shared redesign frame immediately so navigating from a
+     * redesigned hub never drops the player back into an unrelated legacy visual theme. Smaller
+     * inventories retain their exact legacy-sized glyph until their layout is converted to one of
+     * the fixed six-row redesign surfaces.
      */
     fun build(theme: GuiTheme = GuiTheme.NEUTRAL, rows: Int, title: String = ""): String {
+        if (rows == 6) return compose(MenuSurface.GRID.glyphKey, title)
         val themeKey = theme.name.lowercase()
         val glyphName = "guild_bg_${themeKey}_${rows}_row"
+        return compose(glyphName, title)
+    }
+
+    /**
+     * Use this for every redesigned player-facing guild inventory.
+     * All redesign surfaces are six rows so navigation stays in a fixed location.
+     */
+    fun redesign(surface: MenuSurface, title: String = ""): String = compose(surface.glyphKey, title)
+
+    /** Localized GUI labels are Components; flatten only the title text before composing glyph markup. */
+    fun redesign(surface: MenuSurface, title: Component): String =
+        compose(surface.glyphKey, PlainTextComponentSerializer.plainText().serialize(title))
+
+    private fun compose(glyphName: String, title: String): String {
         val prefix = "${HORIZONTAL_OFFSET}<glyph:${glyphName}>"
-        return if (title.isNotEmpty()) {
-            "${prefix}${REWIND_TO_TITLE}${title}"
-        } else {
-            prefix
-        }
+        return if (title.isNotEmpty()) "$prefix$REWIND_TO_TITLE$title" else prefix
     }
 }

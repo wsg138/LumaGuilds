@@ -76,15 +76,13 @@ class GuildEmojiClearTest {
         val player = server.addPlayer()
         val guild = Guild(id = guildId, name = "Clearable", emoji = storedEmoji, createdAt = Instant.EPOCH)
         val menu = GuildEmojiMenu(mockk<MenuNavigator>(relaxed = true), player, guild)
-        val pane = com.github.stefvanschie.inventoryframework.pane.StaticPane(9, 3)
-        val addClearButton = GuildEmojiMenu::class.java.getDeclaredMethod(
-            "addClearButton",
+        val pane = com.github.stefvanschie.inventoryframework.pane.StaticPane(9, 6)
+        val addClear = GuildEmojiMenu::class.java.getDeclaredMethod(
+            "addClear",
             com.github.stefvanschie.inventoryframework.pane.StaticPane::class.java,
-            Int::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType,
         ).apply { isAccessible = true }
 
-        addClearButton.invoke(menu, pane, 4, 2)
+        addClear.invoke(menu, pane)
         pane.items.single().callAction(mockk(relaxed = true))
 
         assertNull(storedEmoji)

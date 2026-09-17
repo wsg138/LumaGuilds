@@ -89,6 +89,24 @@ class LocaleContractTest {
         "menu.tag_editor.validation.unclosed",
         "menu.tag_editor.validation.unknown_tag",
     )
+    /**
+     * The redesign intentionally replaces these complete legacy menu surfaces. Keeping their old
+     * locale keys temporarily is deliberate compatibility while downstream servers and Bedrock
+     * forms finish moving to the shared UI system. This is scoped by namespace rather than by a
+     * global non-zero dead-key baseline, so unrelated dead locale keys still fail the contract.
+     */
+    private val retiredGuildMenuCompatibilityPrefixes = setOf(
+        "menu.guild_settings.",
+        "menu.guild_relations.",
+        "menu.party.management.",
+        "menu.guild_home.",
+        "menu.member_management.",
+        "menu.rank_management.",
+        "menu.rank_edit.",
+        "menu.permission_category.",
+        "menu.control_panel.item.progression.",
+        "menu.control_panel.state.",
+    )
     private val declaredDynamicKeys =
         claimPermissionDynamicKeys + flagDynamicKeys + rankPermissionDynamicKeys + finiteMenuStateKeys +
             helpTopicDynamicKeys + localizedHelperKeys
@@ -222,6 +240,13 @@ class LocaleContractTest {
     }
 
     @Test
+    fun `help topic localization keys exist in the locale`() {
+        val missing = helpTopicDynamicKeys - localeKeys()
+
+        assertEquals(emptySet<String>(), missing, missing.sorted().joinToString())
+    }
+
+    @Test
     fun `escaped command metavariables are not locale placeholders`() {
         assertEquals(
             setOf("player"),
@@ -277,11 +302,14 @@ class LocaleContractTest {
     }
 
     @Test
-    fun `locale dead keys match the recovery baseline`() {
+    fun `locale dead keys outside retired guild menu compatibility namespaces match the recovery baseline`() {
         val inventory = LocaleSourceScanner.scan(projectRoot.resolve("src/main/kotlin"))
         val unused = localeKeys() - inventory.literalKeys - declaredDynamicKeys
+        val unexpectedUnused = unused.filterNot { key ->
+            retiredGuildMenuCompatibilityPrefixes.any(key::startsWith)
+        }
 
-        assertEquals(BASELINE_UNUSED_KEYS, unused.size, unused.sorted().joinToString())
+        assertEquals(BASELINE_UNUSED_KEYS, unexpectedUnused.size, unexpectedUnused.sorted().joinToString())
     }
 
     @Test

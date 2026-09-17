@@ -61,14 +61,12 @@ data class Guild(
         require(bankBalance >= 0) { "Guild bank balance cannot be negative." }
         require(joinFeeAmount >= 0) { "Join fee amount cannot be negative." }
 
-        // Validate emoji format if provided (should be Nexo placeholder format like ":emojiname:")
         emoji?.let { emojiValue ->
             require(emojiValue.startsWith(":") && emojiValue.endsWith(":") && emojiValue.length > 2) {
                 "Guild emoji must be a valid Nexo placeholder format (e.g., ':catsmileysmile:')"
             }
         }
 
-        // Validate description length if provided
         description?.let { descValue ->
             require(descValue.length <= 100) {
                 "Guild description must be 100 characters or less."
@@ -84,69 +82,42 @@ data class Guild(
         get() = homes.defaultHome
 }
 
-/**
- * Represents the home location of a guild.
- *
- * @property worldId The unique identifier of the world.
- * @property position The position coordinates in the world.
- */
+/** Represents the home location of a guild. */
 data class GuildHome(
     val worldId: UUID,
     val position: Position3D,
     val allowedRankIds: Set<UUID> = emptySet()
 )
 
-/**
- * Represents multiple home locations for a guild with names/identifiers.
- *
- * @property homes A map of home names to their locations.
- */
+/** Represents multiple home locations for a guild with names/identifiers. */
 data class GuildHomes(
     val homes: Map<String, GuildHome> = emptyMap()
 ) {
-    /**
-     * Gets the default/main home (first one if no "main" exists).
-     */
     val defaultHome: GuildHome?
         get() = homes["main"] ?: homes.values.firstOrNull()
 
-    /**
-     * Gets all home names.
-     */
     val homeNames: Set<String>
         get() = homes.keys
 
-    /**
-     * Gets a specific home by name.
-     */
     fun getHome(name: String): GuildHome? = homes[name]
 
-    /**
-     * Adds or updates a home.
-     */
     fun withHome(name: String, home: GuildHome): GuildHomes {
         val newHomes = homes.toMutableMap()
         newHomes[name] = home
         return GuildHomes(newHomes)
     }
 
-    /**
-     * Removes a home by name.
-     */
     fun withoutHome(name: String): GuildHomes {
         val newHomes = homes.toMutableMap()
         newHomes.remove(name)
         return GuildHomes(newHomes)
     }
 
-    /**
-     * Checks if the guild has any homes.
-     */
     fun hasHomes(): Boolean = homes.isNotEmpty()
 
-    /**
-     * Gets the number of homes set.
-     */
+    /** Mirrors collection semantics for UI/state checks. */
+    fun isEmpty(): Boolean = homes.isEmpty()
+
     val size: Int
         get() = homes.size
 
@@ -155,22 +126,11 @@ data class GuildHomes(
     }
 }
 
-/**
- * Represents the mode of a guild.
- */
 enum class GuildMode {
     PEACEFUL,
     HOSTILE
 }
 
-/**
- * Represents the location of a guild's physical vault chest.
- *
- * @property worldId The unique identifier of the world.
- * @property x The X coordinate.
- * @property y The Y coordinate.
- * @property z The Z coordinate.
- */
 data class GuildVaultLocation(
     val worldId: UUID,
     val x: Int,
@@ -178,16 +138,8 @@ data class GuildVaultLocation(
     val z: Int
 )
 
-/**
- * Represents the status of a guild's vault.
- */
 enum class VaultStatus {
-    /** Chest has been placed and is functional */
     AVAILABLE,
-
-    /** Chest was broken/destroyed and needs to be replaced */
     UNAVAILABLE,
-
-    /** Guild has never placed a vault chest */
     NEVER_PLACED
 }
