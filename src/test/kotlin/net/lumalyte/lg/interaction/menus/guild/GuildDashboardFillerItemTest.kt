@@ -38,9 +38,10 @@ internal class GuildDashboardFillerItemTest {
     fun `GuildDashboard is the six row eight card Guild Home`() {
         val source = dashboardSource()
 
-        assertTrue(source.contains("ChestGui(6, redesignTitle(\"Guild Home\"))"))
+        assertTrue(source.contains("Bukkit.createInventory(newHolder, 54, redesignTitle(\"Guild Home\"))"))
         assertTrue(source.contains("Card.entries"))
         assertTrue(source.contains("lg_redesign_hitbox"))
+        assertFalse(source.contains("ChestGui("), "Focused 26.2 preview must not depend on InventoryFramework")
 
         listOf(
             "lg_redesign_members",
@@ -57,17 +58,14 @@ internal class GuildDashboardFillerItemTest {
     }
 
     @Test
-    fun `GuildDashboard routes cards to the intended live destinations`() {
+    fun `GuildDashboard preview clicks stay on the native home screen`() {
         val source = dashboardSource()
 
-        assertTrue(source.contains("createGuildBankMenu(menuNavigator, player, guild)"))
-        assertTrue(source.contains("createGuildHomeMenu(menuNavigator, player, guild)"))
-        assertTrue(source.contains("createGuildPartyManagementMenu(menuNavigator, player, guild)"))
-        assertTrue(source.contains("createGuildSettingsMenu(menuNavigator, player, guild)"))
-        assertTrue(source.contains("GuildHomeSectionMenu.Section.MEMBERS"))
-        assertTrue(source.contains("GuildHomeSectionMenu.Section.LEVEL"))
-        assertTrue(source.contains("GuildHomeSectionMenu.Section.ALLIES"))
-        assertTrue(source.contains("GuildHomeSectionMenu.Section.CUSTOMIZE"))
+        assertTrue(source.contains("cardBySlot[rawSlot]"))
+        assertTrue(source.contains("player.sendActionBar"))
+        assertTrue(source.contains("this card will open its full section"))
+        assertFalse(source.contains("createGuildBankMenu(menuNavigator, player, guild)"))
+        assertFalse(source.contains("GuildHomeSectionMenu.Section.MEMBERS"))
     }
 
     private fun dashboardSource(): String = Path.of(System.getProperty("user.dir"))
