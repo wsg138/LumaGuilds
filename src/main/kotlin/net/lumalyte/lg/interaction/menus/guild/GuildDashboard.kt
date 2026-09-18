@@ -1,9 +1,7 @@
 package net.lumalyte.lg.interaction.menus.guild
 
-import com.github.stefvanschie.inventoryframework.gui.GuiItem
-import com.github.stefvanschie.inventoryframework.gui.type.ChestGui
-import com.github.stefvanschie.inventoryframework.pane.StaticPane
 import net.badgersmc.nexus.i18n.LangService
+import net.lumalyte.lg.LumaGuilds
 import net.lumalyte.lg.application.services.GuildService
 import net.lumalyte.lg.application.services.MemberService
 import net.lumalyte.lg.application.services.RankService
@@ -15,13 +13,27 @@ import net.lumalyte.lg.interaction.menus.MenuNavigator
 import net.lumalyte.lg.utils.NexoItemProvider
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.HandlerList
+import org.bukkit.event.Listener
+import org.bukkit.event.inventory.InventoryClickEvent
+import org.bukkit.event.inventory.InventoryCloseEvent
+import org.bukkit.inventory.Inventory
+import org.bukkit.inventory.InventoryHolder
 import org.bukkit.inventory.ItemStack
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-/** Focused, six-row Guild Home visual/navigation preview. */
+/**
+ * Focused Guild Home visual preview.
+ *
+ * This page intentionally uses Bukkit directly instead of InventoryFramework so it can be
+ * evaluated on Minecraft/Paper 26.2 while the legacy LumaGuilds menus remain on IF 0.11.6.
+ * Category clicks stay on this preview page until the visual/navigation design is signed off.
+ */
 class GuildDashboard(
     private val menuNavigator: MenuNavigator,
     private val player: Player,
@@ -30,8 +42,9 @@ class GuildDashboard(
     private val rankService: RankService,
     private val memberService: MemberService,
     private val menuFactory: MenuFactory,
-) : Menu, KoinComponent {
+) : Menu, KoinComponent, Listener {
     private val lang: LangService by inject()
+    private val plugin: LumaGuilds by inject()
 
     private enum class Card(
         val title: String,
@@ -49,98 +62,170 @@ class GuildDashboard(
         SETTINGS("Guild Settings", "lg_redesign_settings", Material.COMPARATOR, "Access, mode, integrations and advanced settings"),
     }
 
+    private class PreviewHolder : InventoryHolder {
+        lateinit var backingInventory: Inventory
+        override fun getInventory(): Inventory = backingInventory
+    }
+
+    private var holder: PreviewHolder? = null
+    private val cardBySlot = mutableMapOf<Int, Card>()
+    private var listenerRegistered = false
+
     override fun open() {
         if (memberService.getMember(player.uniqueId, guild.id) == null) {
             player.sendMessage(lang.msg("menu.dashboard.feedback.not_member"))
             menuNavigator.goBack()
             return
         }
+
         guild = guildService.getGuild(guild.id) ?: run {
             player.sendMessage(lang.msg("menu.dashboard.feedback.guild_missing"))
             menuNavigator.goBack()
             return
         }
 
-        val gui = ChestGui(6, redesignTitle("Guild Home"))
-        gui.setOnGlobalClick { it.isCancelled = true }
-        val pane = StaticPane(0, 0, 9, 6)
-        gui.addPane(pane)
-
-        addHeader(pane)
-        Card.entries.forEachIndexed { index, card ->
-            addCard(pane, (index % 4) * 2, if (index < 4) 1 else 3, card)
+        if (!listenerRegistered) {
+            Bukkit.getPluginManager().registerEvents(this, plugin)
+            listenerRegistered = true
         }
-        addFooter(pane)
-        gui.show(player)
+
+        cardBySlot.clear()
+        val newHolder = PreviewHolder()
+        val inventory = Bukkit.createInventory(newHolder, 54, redesignTitle("Guild Home"))
+        newHolder.backingInventory = inventory
+        holder = newHolder
+
+        addHeader(inventory)
+        Card.entries.forEachIndexed { index, card ->
+            addCard(inventory, (index % 4) * 2, if (index < 4) 1 else 3, card)
+        }
+        addFooter(inventory)
+
+        player.openInventory(inventory)
     }
 
-    private fun addHeader(pane: StaticPane) {
+    private fun addHeader(inventory: Inventory) {
         val rank = rankService.getPlayerRank(player.uniqueId, guild.id)
         val members = memberService.getMemberCount(guild.id)
         val emoji = guildService.getEmoji(guild.id)
         val displayName = if (emoji.isNullOrBlank()) guild.name else "$emoji ${guild.name}"
 
-        pane.addItem(GuiItem(item(Material.BELL, displayName, NamedTextColor.GOLD,
+        inventory.setItem(0, item(
+            Material.BELL,
+            displayName,
+            NamedTextColor.GOLD,
             "Guild Home" to NamedTextColor.AQUA,
-            "Everything important starts here." to NamedTextColor.GRAY)), 0, 0)
-
-        pane.addItem(GuiItem(item(Material.PLAYER_HEAD, "$members Members", NamedTextColor.WHITE,
-            "Open Members & Ranks below" to NamedTextColor.GRAY)), 3, 0)
-
-        pane.addItem(GuiItem(item(Material.GOLDEN_HELMET, rank?.name ?: "Member", NamedTextColor.GOLD,
-            "Your guild rank" to NamedTextColor.GRAY)), 5, 0)
-
-        pane.addItem(GuiItem(item(Material.GOLD_INGOT, "Guild Bank", NamedTextColor.YELLOW,
+            "Everything important starts here." to NamedTextColor.GRAY,
+        ))
+        inventory.setItem(3, item(
+            Material.PLAYER_HEAD,
+            "$members Members",
+            NamedTextColor.WHITE,
+            "Members & Ranks" to NamedTextColor.AQUA,
+        ))
+        inventory.setItem(5, item(
+            Material.GOLDEN_HELMET,
+            rank?.name ?: "Member",
+            NamedTextColor.GOLD,
+            "Your guild rank" to NamedTextColor.GRAY,
+        ))
+        inventory.setItem(8, item(
+            Material.GOLD_INGOT,
+            "Guild Bank",
+            NamedTextColor.YELLOW,
             guild.bankBalance.toString() to NamedTextColor.WHITE,
-            "Open Money & Vault below" to NamedTextColor.GRAY)), 8, 0)
+            "Money & Vault" to NamedTextColor.AQUA,
+        ))
     }
 
-    private fun addCard(pane: StaticPane, x: Int, y: Int, card: Card) {
+    private fun addCard(inventory: Inventory, x: Int, y: Int, card: Card) {
         val icon = NexoItemProvider.getItemStackOrFallback(card.iconId) { ItemStack.of(card.fallback) }
-        setMeta(icon, Component.text(card.title, NamedTextColor.WHITE), listOf(
-            Component.text(card.summary, NamedTextColor.GRAY),
-            Component.empty(),
-            Component.text("Click to open", NamedTextColor.AQUA),
+        setMeta(
+            icon,
+            Component.text(card.title, NamedTextColor.WHITE),
+            listOf(
+                Component.text(card.summary, NamedTextColor.GRAY),
+                Component.empty(),
+                Component.text("Click to preview destination", NamedTextColor.AQUA),
+            ),
+        )
+
+        val topLeft = slot(x, y)
+        inventory.setItem(topLeft, icon)
+        cardBySlot[topLeft] = card
+
+        val secondarySlots = listOf(slot(x + 1, y), slot(x, y + 1), slot(x + 1, y + 1))
+        secondarySlots.forEach { targetSlot ->
+            val hitbox = NexoItemProvider.getItemStack("lg_redesign_hitbox")
+            if (hitbox != null) {
+                setMeta(
+                    hitbox,
+                    Component.text(card.title, NamedTextColor.WHITE),
+                    listOf(Component.text(card.summary, NamedTextColor.GRAY)),
+                )
+                inventory.setItem(targetSlot, hitbox)
+            }
+            cardBySlot[targetSlot] = card
+        }
+    }
+
+    private fun addFooter(inventory: Inventory) {
+        inventory.setItem(45, item(
+            Material.KNOWLEDGE_BOOK,
+            "Guild Information",
+            NamedTextColor.YELLOW,
+            "Guild overview and public details" to NamedTextColor.GRAY,
         ))
 
-        val action: () -> Unit = {
-            when (card) {
-                Card.MEMBERS -> menuNavigator.openMenu(GuildHomeSectionMenu(menuNavigator, player, guild, menuFactory, GuildHomeSectionMenu.Section.MEMBERS))
-                Card.MONEY -> menuNavigator.openMenu(menuFactory.createGuildBankMenu(menuNavigator, player, guild))
-                Card.LEVEL -> menuNavigator.openMenu(GuildHomeSectionMenu(menuNavigator, player, guild, menuFactory, GuildHomeSectionMenu.Section.LEVEL))
-                Card.HOMES -> menuNavigator.openMenu(menuFactory.createGuildHomeMenu(menuNavigator, player, guild))
-                Card.ALLIES -> menuNavigator.openMenu(GuildHomeSectionMenu(menuNavigator, player, guild, menuFactory, GuildHomeSectionMenu.Section.ALLIES))
-                Card.PARTIES -> menuNavigator.openMenu(menuFactory.createGuildPartyManagementMenu(menuNavigator, player, guild))
-                Card.CUSTOMIZE -> menuNavigator.openMenu(GuildHomeSectionMenu(menuNavigator, player, guild, menuFactory, GuildHomeSectionMenu.Section.CUSTOMIZE))
-                Card.SETTINGS -> menuNavigator.openMenu(menuFactory.createGuildSettingsMenu(menuNavigator, player, guild))
-            }
-        }
-
-        pane.addItem(GuiItem(icon) { action() }, x, y)
-        if (NexoItemProvider.isAvailable()) {
-            listOf(x + 1 to y, x to y + 1, x + 1 to y + 1).forEach { (hitboxX, hitboxY) ->
-                val hitbox = NexoItemProvider.getItemStack("lg_redesign_hitbox") ?: return@forEach
-                setMeta(hitbox, Component.text(card.title, NamedTextColor.WHITE), emptyList())
-                pane.addItem(GuiItem(hitbox) { action() }, hitboxX, hitboxY)
-            }
-        }
-    }
-
-    private fun addFooter(pane: StaticPane) {
-        val info = item(Material.KNOWLEDGE_BOOK, "Guild Information", NamedTextColor.YELLOW,
-            "View the guild overview and public details" to NamedTextColor.GRAY,
-            "Click to open" to NamedTextColor.AQUA)
-        pane.addItem(GuiItem(info) {
-            menuNavigator.openMenu(menuFactory.createGuildInfoMenu(menuNavigator, player, guild))
-        }, 0, 5)
-
-        pane.addItem(GuiItem(item(Material.BOOK, "Eight simple starting points", NamedTextColor.AQUA,
+        inventory.setItem(49, item(
+            Material.BOOK,
+            "Eight simple starting points",
+            NamedTextColor.AQUA,
             "Pick what you want to do instead of memorizing commands." to NamedTextColor.GRAY,
-            "Hover any icon for a short explanation." to NamedTextColor.DARK_GRAY)), 4, 5)
+            "This focused build is for Guild Home visual testing." to NamedTextColor.DARK_GRAY,
+        ))
 
-        val close = item(Material.BARRIER, "Close", NamedTextColor.RED)
-        pane.addItem(GuiItem(close) { player.closeInventory() }, 8, 5)
+        inventory.setItem(53, item(Material.BARRIER, "Close", NamedTextColor.RED))
     }
+
+    @EventHandler
+    fun onInventoryClick(event: InventoryClickEvent) {
+        val currentHolder = holder ?: return
+        if (event.view.topInventory.holder !== currentHolder) return
+        if (event.whoClicked.uniqueId != player.uniqueId) return
+
+        event.isCancelled = true
+        val rawSlot = event.rawSlot
+        if (rawSlot !in 0 until event.view.topInventory.size) return
+
+        if (rawSlot == 53) {
+            player.closeInventory()
+            return
+        }
+
+        cardBySlot[rawSlot]?.let { card ->
+            player.sendActionBar(
+                Component.text(card.title, NamedTextColor.AQUA)
+                    .append(Component.text(" — this card will open its full section.", NamedTextColor.GRAY)),
+            )
+        }
+    }
+
+    @EventHandler
+    fun onInventoryClose(event: InventoryCloseEvent) {
+        val currentHolder = holder ?: return
+        if (event.inventory.holder !== currentHolder) return
+        if (event.player.uniqueId != player.uniqueId) return
+
+        holder = null
+        cardBySlot.clear()
+        if (listenerRegistered) {
+            HandlerList.unregisterAll(this)
+            listenerRegistered = false
+        }
+    }
+
+    private fun slot(x: Int, y: Int): Int = y * 9 + x
 
     private fun item(
         material: Material,
@@ -148,7 +233,11 @@ class GuildDashboard(
         nameColor: NamedTextColor,
         vararg lore: Pair<String, NamedTextColor>,
     ): ItemStack = ItemStack.of(material).also {
-        setMeta(it, Component.text(name, nameColor), lore.map { (text, color) -> Component.text(text, color) })
+        setMeta(
+            it,
+            Component.text(name, nameColor),
+            lore.map { (text, color) -> Component.text(text, color) },
+        )
     }
 
     private fun redesignTitle(title: String): String =
@@ -163,7 +252,7 @@ class GuildDashboard(
 
     /**
      * Preview-only references for the existing dashboard translations. They remain explicit so the
-     * strict locale scanner can verify every retained key while the visual prototype uses temporary
+     * strict locale scanner can verify every retained key while the visual preview uses temporary
      * English card copy. Delete this compatibility block when the final copy is localized.
      */
     @Suppress("unused")
