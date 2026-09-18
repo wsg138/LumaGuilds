@@ -639,7 +639,7 @@ fun economyModule() = module {
 /**
  * Vault module - Guild vault system with inventory management and backups
  */
-fun vaultModule() = module {
+fun vaultModule(claimsEnabled: Boolean) = module {
     // Repositories
     single<net.lumalyte.lg.application.persistence.GuildVaultRepository> {
         net.lumalyte.lg.infrastructure.persistence.guilds.GuildVaultRepositorySQLite(get())
@@ -663,7 +663,7 @@ fun vaultModule() = module {
             get(),
             get(),
             get(),
-            get(),
+            if (claimsEnabled) get<GetClaimAtPosition>() else null,
             get()
         )
     }
@@ -824,7 +824,7 @@ fun appModule(plugin: LumaGuilds, storage: Storage<*>, claimsEnabled: Boolean = 
         socialModule(),
         progressionModule(),
         economyModule(),
-        vaultModule(),
+        vaultModule(claimsEnabled),
         utilitiesModule(),
         integrationModule(plugin)
     ) + if (claimsEnabled) {
