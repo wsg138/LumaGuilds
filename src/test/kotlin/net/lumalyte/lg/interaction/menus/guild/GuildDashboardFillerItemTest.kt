@@ -7,11 +7,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Contracts for the focused Guild Home preview.
+ * Contracts for the focused Paper 26.2 Guild Home preview.
  *
- * The redesign intentionally uses a Nexo background glyph plus eight oversized category symbols.
- * Inventory filler panes are still forbidden: the background owns the visual structure and only
- * meaningful controls/hitboxes should occupy slots.
+ * The entire home-page presentation is one Nexo glyph texture. There are intentionally no
+ * category item models or filler/hitbox items: Bukkit click mapping makes empty slots interactive.
  */
 internal class GuildDashboardFillerItemTest {
 
@@ -35,26 +34,18 @@ internal class GuildDashboardFillerItemTest {
     }
 
     @Test
-    fun `GuildDashboard is the six row eight card Guild Home`() {
+    fun `GuildDashboard is one integrated native home skin`() {
         val source = dashboardSource()
 
-        assertTrue(source.contains("Bukkit.createInventory(newHolder, 54, redesignTitle(\"Guild Home\"))"))
+        assertTrue(source.contains("Bukkit.createInventory(newHolder, 54, redesignTitle())"))
         assertTrue(source.contains("Card.entries"))
-        assertTrue(source.contains("lg_redesign_hitbox"))
-        assertFalse(source.contains("ChestGui("), "Focused 26.2 preview must not depend on InventoryFramework")
-
-        listOf(
-            "lg_redesign_members",
-            "lg_redesign_money",
-            "lg_redesign_level",
-            "lg_redesign_homes",
-            "lg_redesign_allies",
-            "lg_redesign_parties",
-            "lg_redesign_customize",
-            "lg_redesign_settings",
-        ).forEach { nexoId ->
-            assertTrue(source.contains(nexoId), "Missing Guild Home card icon $nexoId")
-        }
+        assertTrue(source.contains("AdventureUtils.NEXO_SERIALIZER"))
+        assertTrue(source.contains("<glyph:guild_redesign_bg_home_6_row>"))
+        assertTrue(source.contains("mapCard("))
+        assertFalse(source.contains("ChestGui("), "Paper 26.2 home preview must not depend on InventoryFramework")
+        assertFalse(source.contains("NexoItemProvider"), "Icons are baked into the background skin")
+        assertFalse(source.contains("inventory.setItem("), "Top GUI slots must remain visually empty")
+        assertFalse(source.contains("lg_redesign_hitbox"), "Empty Bukkit slots are the hitboxes")
     }
 
     @Test
@@ -63,7 +54,6 @@ internal class GuildDashboardFillerItemTest {
 
         assertTrue(source.contains("cardBySlot[rawSlot]"))
         assertTrue(source.contains("player.sendActionBar"))
-        assertTrue(source.contains("this card will open its full section"))
         assertFalse(source.contains("createGuildBankMenu(menuNavigator, player, guild)"))
         assertFalse(source.contains("GuildHomeSectionMenu.Section.MEMBERS"))
     }
