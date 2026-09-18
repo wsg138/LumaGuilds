@@ -64,7 +64,7 @@ dependencies {
     implementation("org.mariadb.jdbc:mariadb-java-client:3.3.2")
     implementation("co.aikar:acf-paper:0.5.1-SNAPSHOT")
     implementation("co.aikar:idb-core:1.0.0-SNAPSHOT")
-    implementation("com.github.stefvanschie.inventoryframework:IF:0.12.0")
+    implementation("com.github.stefvanschie.inventoryframework:IF:0.11.6")
     implementation("io.insert-koin:koin-core:4.0.2")
     implementation("org.json:json:20240303")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
