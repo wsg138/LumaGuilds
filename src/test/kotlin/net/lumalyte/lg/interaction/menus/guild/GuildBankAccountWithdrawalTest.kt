@@ -334,14 +334,14 @@ internal class GuildBankAccountWithdrawalTest {
 
     private fun quickWithdrawAll() {
         val method = GuildBankMenu::class.java.getDeclaredMethod(
-            "handleQuickAction", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType,
+            "performQuickAction", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType,
         ).apply { isAccessible = true }
         method.invoke(menu, -1, false)
         server.scheduler.performTicks(2)
     }
 
     private fun withdraw(): Boolean {
-        val method = GuildBankMenu::class.java.getDeclaredMethod("handleWithdrawal", Int::class.javaPrimitiveType)
+        val method = GuildBankMenu::class.java.getDeclaredMethod("withdraw", Int::class.javaPrimitiveType)
             .apply { isAccessible = true }
         return method.invoke(menu, START_GOLD.toInt()) as Boolean
     }

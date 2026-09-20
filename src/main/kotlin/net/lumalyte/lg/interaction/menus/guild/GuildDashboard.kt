@@ -1,32 +1,29 @@
 package net.lumalyte.lg.interaction.menus.guild
 
-import net.badgersmc.nexus.i18n.LangService
-import net.lumalyte.lg.utils.MenuTitleBuilder
-import net.lumalyte.lg.infrastructure.i18n.gui
-import net.lumalyte.lg.infrastructure.i18n.guiTitle
-
 import com.github.stefvanschie.inventoryframework.gui.GuiItem
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui
 import com.github.stefvanschie.inventoryframework.pane.StaticPane
-import net.lumalyte.lg.application.services.*
+import net.lumalyte.lg.application.services.GuildService
+import net.lumalyte.lg.application.services.MemberService
+import net.lumalyte.lg.application.services.RankService
 import net.lumalyte.lg.domain.entities.Guild
 import net.lumalyte.lg.interaction.menus.Menu
 import net.lumalyte.lg.interaction.menus.MenuFactory
 import net.lumalyte.lg.interaction.menus.MenuNavigator
 import net.lumalyte.lg.utils.NexoItemProvider
-import net.lumalyte.lg.utils.name
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 
 /**
- * Guild Dashboard — the hub-and-spoke entry point for guild management.
+ * Guild dashboard organized around player intent rather than implementation categories.
  *
- * A 3-row menu with 8 navigation category icons and a guild info display.
- * Replaces the old 6-row flat control panel.
+ * Eight large task cards expose every major guild system while the top row keeps the most useful
+ * live guild status visible. Nexo supplies the visual treatment; vanilla materials remain complete
+ * fallbacks when the custom pack is unavailable.
  */
 class GuildDashboard(
     private val menuNavigator: MenuNavigator,
@@ -35,169 +32,173 @@ class GuildDashboard(
     private val guildService: GuildService,
     private val rankService: RankService,
     private val memberService: MemberService,
-    private val menuFactory: MenuFactory
+    private val menuFactory: MenuFactory,
 ) : Menu, KoinComponent {
-    private val lang: LangService by inject()
 
     override fun open() {
-        val playerId = player.uniqueId
-
-        // Security check
-        if (memberService.getMember(playerId, guild.id) == null) {
-            player.sendMessage(lang.msg("menu.dashboard.feedback.not_member"))
+        if (memberService.getMember(player.uniqueId, guild.id) == null) {
+            player.sendMessage(Component.text("You are no longer a member of this guild.", NamedTextColor.RED))
             menuNavigator.goBack()
             return
         }
 
-        // Refresh guild data
         guild = guildService.getGuild(guild.id) ?: run {
-            player.sendMessage(lang.msg("menu.dashboard.feedback.guild_missing"))
+            player.sendMessage(Component.text("That guild no longer exists.", NamedTextColor.RED))
             menuNavigator.goBack()
             return
         }
 
-        val gui = ChestGui(3, MenuTitleBuilder.build(
-            guild.guiTheme,
-            3,
-            lang.guiTitle("menu.dashboard.title", "guild" to guild.name),
-        ))
-        val pane = StaticPane(0, 0, 9, 3)
-        gui.setOnTopClick { e -> e.isCancelled = true }
-        gui.setOnBottomClick { e ->
-            val click = e.click
-            if (click == org.bukkit.event.inventory.ClickType.SHIFT_LEFT ||
-                click == org.bukkit.event.inventory.ClickType.SHIFT_RIGHT
-            ) e.isCancelled = true
-        }
+        val gui = ChestGui(6, GuildRedesignSectionMenu.redesignTitle("Guild Home"))
+        gui.setOnGlobalClick { it.isCancelled = true }
+        val pane = StaticPane(0, 0, 9, 6)
         gui.addPane(pane)
 
-        // Guild info display at top center
-        addGuildInfoDisplay(pane, 4, 0)
+        addStatusRow(pane)
 
-        // Row 1 (y=1): Information, Members, Ranks, Economy
-        addNavButton(pane, 0, 1, "lg_nav_info", Material.KNOWLEDGE_BOOK,
-            lang.gui("menu.dashboard.item.information.name"),
-            lang.gui("menu.dashboard.item.information.lore.line_1"),
-            lang.gui("menu.dashboard.item.information.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildInfoMenu(menuNavigator, player, guild))
+        val cards = listOf(
+            GuildRedesignSectionMenu.Section.MEMBERS,
+            GuildRedesignSectionMenu.Section.MONEY,
+            GuildRedesignSectionMenu.Section.LEVEL,
+            GuildRedesignSectionMenu.Section.HOMES,
+            GuildRedesignSectionMenu.Section.ALLIES,
+            GuildRedesignSectionMenu.Section.PARTIES,
+            GuildRedesignSectionMenu.Section.CUSTOMIZE,
+            GuildRedesignSectionMenu.Section.SETTINGS,
+        )
+        cards.forEachIndexed { index, section ->
+            val x = (index % 4) * 2
+            val y = if (index < 4) 1 else 3
+            addCard(pane, x, y, section)
         }
 
-        addNavButton(pane, 2, 1, "lg_nav_members", Material.PLAYER_HEAD,
-            lang.gui("menu.dashboard.item.members.name"),
-            lang.gui("menu.dashboard.item.members.lore.line_1"),
-            lang.gui("menu.dashboard.item.members.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildMemberManagementMenu(menuNavigator, player, guild))
-        }
-
-        addNavButton(pane, 4, 1, "lg_nav_ranks", Material.IRON_SWORD,
-            lang.gui("menu.dashboard.item.ranks.name"),
-            lang.gui("menu.dashboard.item.ranks.lore.line_1"),
-            lang.gui("menu.dashboard.item.ranks.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildRankManagementMenu(menuNavigator, player, guild))
-        }
-
-        addNavButton(pane, 6, 1, "lg_nav_quests", Material.CLOCK,
-            lang.gui("menu.dashboard.item.quests.name"),
-            lang.gui("menu.dashboard.item.quests.lore.line_1"),
-            lang.gui("menu.dashboard.item.quests.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildQuestsMenu(menuNavigator, player, guild))
-        }
-
-        addNavButton(pane, 8, 1, "lg_nav_economy", Material.GOLD_BLOCK,
-            lang.gui("menu.dashboard.item.economy.name"),
-            lang.gui("menu.dashboard.item.economy.lore.line_1"),
-            lang.gui("menu.dashboard.item.economy.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildBankMenu(menuNavigator, player, guild))
-        }
-
-        // Row 2 (y=2): Settings, Progression, Diplomacy, Warfare, Statistics
-        addNavButton(pane, 0, 2, "lg_nav_settings", Material.COMMAND_BLOCK,
-            lang.gui("menu.dashboard.item.settings.name"),
-            lang.gui("menu.dashboard.item.settings.lore.line_1"),
-            lang.gui("menu.dashboard.item.settings.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildSettingsMenu(menuNavigator, player, guild))
-        }
-
-        addNavButton(pane, 2, 2, "lg_nav_progression", Material.EXPERIENCE_BOTTLE,
-            lang.gui("menu.dashboard.item.progression.name"),
-            lang.gui("menu.dashboard.item.progression.lore.line_1"),
-            lang.gui("menu.dashboard.item.progression.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildProgressionMenu(menuNavigator, player, guild))
-        }
-
-        addNavButton(pane, 4, 2, "lg_nav_diplomacy", Material.BOOK,
-            lang.gui("menu.dashboard.item.diplomacy.name"),
-            lang.gui("menu.dashboard.item.diplomacy.lore.line_1"),
-            lang.gui("menu.dashboard.item.diplomacy.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildRelationsMenu(menuNavigator, player, guild))
-        }
-
-        addNavButton(pane, 6, 2, "lg_nav_warfare", Material.DIAMOND_SWORD,
-            lang.gui("menu.dashboard.item.warfare.name"),
-            lang.gui("menu.dashboard.item.warfare.lore.line_1"),
-            lang.gui("menu.dashboard.item.warfare.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildWarManagementMenu(menuNavigator, player, guild))
-        }
-
-        addNavButton(pane, 8, 2, "lg_nav_statistics", Material.BOOKSHELF,
-            lang.gui("menu.dashboard.item.statistics.name"),
-            lang.gui("menu.dashboard.item.statistics.lore.line_1"),
-            lang.gui("menu.dashboard.item.statistics.lore.line_2")) {
-            menuNavigator.openMenu(menuFactory.createGuildStatisticsMenu(menuNavigator, player, guild))
-        }
-
+        addFooter(pane)
         gui.show(player)
     }
 
-    /**
-     * Creates a navigation category button with Nexo icon + fallback.
-     */
-    private fun addNavButton(
-        pane: StaticPane,
-        x: Int,
-        y: Int,
-        nexoId: String,
-        fallbackMaterial: Material,
-        displayName: Component,
-        vararg loreLines: Component,
-        action: () -> Unit
-    ) {
-        val item = NexoItemProvider.getItemStackOrFallback(nexoId) {
-            ItemStack.of(fallbackMaterial).name(displayName)
-        }
+    private fun addStatusRow(pane: StaticPane) {
+        val rank = rankService.getPlayerRank(player.uniqueId, guild.id)
+        val members = memberService.getMemberCount(guild.id)
 
-        val meta = item.itemMeta ?: return
-        meta.displayName(displayName)
-        meta.lore(loreLines.toList())
-        item.itemMeta = meta
+        val identity = ItemStack.of(Material.BELL)
+        GuildRedesignSectionMenu.setMeta(
+            identity,
+            Component.text(guild.name, NamedTextColor.GOLD),
+            listOf(
+                Component.text("Your rank: ${rank?.name ?: "Member"}", NamedTextColor.AQUA),
+                Component.text("$members members", NamedTextColor.GRAY),
+                Component.text("Bank: ${guild.bankBalance}", NamedTextColor.GRAY),
+            ),
+        )
+        pane.addItem(GuiItem(identity), 0, 0)
 
-        pane.addItem(GuiItem(item) { action() }, x, y)
+        val membersItem = ItemStack.of(Material.PLAYER_HEAD)
+        GuildRedesignSectionMenu.setMeta(
+            membersItem,
+            Component.text("$members Members", NamedTextColor.WHITE),
+            listOf(
+                Component.text("Open the full member-management screen", NamedTextColor.GRAY),
+                Component.empty(),
+                Component.text("Click to open", NamedTextColor.AQUA),
+            ),
+        )
+        pane.addItem(
+            GuiItem(membersItem) {
+                menuNavigator.openMenu(menuFactory.createGuildMemberManagementMenu(menuNavigator, player, guild))
+            },
+            3,
+            0,
+        )
+
+        val rankItem = ItemStack.of(Material.GOLDEN_HELMET)
+        GuildRedesignSectionMenu.setMeta(
+            rankItem,
+            Component.text(rank?.name ?: "Member", NamedTextColor.GOLD),
+            listOf(Component.text("Your guild rank", NamedTextColor.GRAY)),
+        )
+        pane.addItem(GuiItem(rankItem), 5, 0)
+
+        val activity = ItemStack.of(Material.BELL)
+        GuildRedesignSectionMenu.setMeta(
+            activity,
+            Component.text("Guild Activity", NamedTextColor.YELLOW),
+            listOf(
+                Component.text("Requests, quests and wars are surfaced", NamedTextColor.GRAY),
+                Component.text("inside their matching task sections.", NamedTextColor.GRAY),
+            ),
+        )
+        pane.addItem(GuiItem(activity), 8, 0)
     }
 
-    /**
-     * Guild identity display at the top center: name, emoji, member count, balance.
-     */
-    private fun addGuildInfoDisplay(pane: StaticPane, x: Int, y: Int) {
-        val emoji = guildService.getEmoji(guild.id)
-        val memberCount = memberService.getMemberCount(guild.id)
-        val rankCount = rankService.listRanks(guild.id).size
+    private fun addCard(pane: StaticPane, x: Int, y: Int, section: GuildRedesignSectionMenu.Section) {
+        val card = NexoItemProvider.getItemStackOrFallback(section.iconId) { ItemStack.of(section.fallback) }
+        GuildRedesignSectionMenu.setMeta(
+            card,
+            Component.text(section.title, NamedTextColor.WHITE),
+            listOf(
+                Component.text(sectionSummary(section), NamedTextColor.GRAY),
+                Component.empty(),
+                Component.text("Click to open", NamedTextColor.AQUA),
+            ),
+        )
 
-        val displayName = if (emoji != null) "$emoji ${guild.name}" else guild.name
+        val action = { menuNavigator.openMenu(GuildRedesignSectionMenu(menuNavigator, player, guild, section)) }
+        pane.addItem(GuiItem(card) { action() }, x, y)
 
-        val item = ItemStack.of(Material.BELL)
-            .name(lang.gui("menu.dashboard.item.guild_info.name", "display_name" to displayName))
-        val lore = java.util.ArrayList<Component>().apply {
-            add(lang.gui("menu.dashboard.item.guild_info.lore.members", "member_count" to memberCount))
-            add(lang.gui("menu.dashboard.item.guild_info.lore.ranks", "rank_count" to rankCount))
-            add(lang.gui("menu.dashboard.item.guild_info.lore.balance", "balance" to guild.bankBalance))
-            add(Component.empty())
-            add(lang.gui("menu.dashboard.item.guild_info.lore.prompt_line_1"))
-            add(lang.gui("menu.dashboard.item.guild_info.lore.prompt_line_2"))
+        if (NexoItemProvider.isAvailable()) {
+            listOf(x + 1 to y, x to y + 1, x + 1 to y + 1).forEach { (hitboxX, hitboxY) ->
+                if (hitboxX <= 8 && hitboxY <= 4) {
+                    val hitbox = NexoItemProvider.getItemStack("lg_redesign_hitbox") ?: return@forEach
+                    GuildRedesignSectionMenu.setMeta(hitbox, Component.text(section.title), emptyList())
+                    pane.addItem(GuiItem(hitbox) { action() }, hitboxX, hitboxY)
+                }
+            }
         }
-        val meta = item.itemMeta ?: return
-        meta.lore(lore)
-        item.itemMeta = meta
+    }
 
-        pane.addItem(GuiItem(item) { it.isCancelled = true }, x, y)
+    private fun sectionSummary(section: GuildRedesignSectionMenu.Section): String = when (section) {
+        GuildRedesignSectionMenu.Section.MEMBERS -> "Roster, ranks, permissions and invites"
+        GuildRedesignSectionMenu.Section.MONEY -> "Bank, vault, transactions and budgets"
+        GuildRedesignSectionMenu.Section.LEVEL -> "XP, quests, perks and statistics"
+        GuildRedesignSectionMenu.Section.HOMES -> "Homes, ally access, tracking and land"
+        GuildRedesignSectionMenu.Section.ALLIES -> "Relations, requests, wars and peace"
+        GuildRedesignSectionMenu.Section.PARTIES -> "Parties, requests, LFG and party tools"
+        GuildRedesignSectionMenu.Section.CUSTOMIZE -> "Description, tag, emoji, banner and theme"
+        GuildRedesignSectionMenu.Section.SETTINGS -> "Access, mode, integrations and danger zone"
+    }
+
+    private fun addFooter(pane: StaticPane) {
+        val index = ItemStack.of(Material.KNOWLEDGE_BOOK)
+        GuildRedesignSectionMenu.setMeta(
+            index,
+            Component.text("Feature Index", NamedTextColor.YELLOW),
+            listOf(
+                Component.text("Can't find something? Browse every guild feature group.", NamedTextColor.GRAY),
+                Component.empty(),
+                Component.text("Click to open", NamedTextColor.AQUA),
+            ),
+        )
+        pane.addItem(
+            GuiItem(index) {
+                menuNavigator.openMenu(GuildRedesignFeatureIndexMenu(menuNavigator, player, guild))
+            },
+            0,
+            5,
+        )
+
+        val guide = ItemStack.of(Material.BOOK)
+        GuildRedesignSectionMenu.setMeta(
+            guide,
+            Component.text("Menu Guide", NamedTextColor.AQUA),
+            listOf(
+                Component.text("Choose a task above; the next screen contains", NamedTextColor.GRAY),
+                Component.text("the related live guild features and command shortcuts.", NamedTextColor.GRAY),
+                Component.text("This item is informational.", NamedTextColor.DARK_GRAY),
+            ),
+        )
+        pane.addItem(GuiItem(guide), 4, 5)
+
+        val close = ItemStack.of(Material.BARRIER)
+        GuildRedesignSectionMenu.setMeta(close, Component.text("Close", NamedTextColor.RED), emptyList())
+        pane.addItem(GuiItem(close) { player.closeInventory() }, 8, 5)
     }
 }
