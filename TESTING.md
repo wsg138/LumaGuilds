@@ -12,12 +12,18 @@ Sentinel Sim is an additional runtime/compatibility layer. It is not the home fo
 
 The owner-directed test-hardening branch adds focused tests under:
 
+- `src/test/kotlin/net/lumalyte/lg/domain/values/AreaTest.kt`
 - `src/test/kotlin/net/lumalyte/lg/domain/values/ClaimPermissionTest.kt`
 - `src/test/kotlin/net/lumalyte/lg/domain/values/FlagTest.kt`
 - `src/test/kotlin/net/lumalyte/lg/domain/values/ChatChannelContractTest.kt`
 
 They protect contracts that previously had no direct test coverage:
 
+- area corner normalization when claim positions are supplied in reverse;
+- inclusive claim containment and overlap boundaries;
+- four-direction direct adjacency versus gaps/diagonal contact;
+- inclusive block counts and X/Z lengths;
+- occupied chunk enumeration across positive and negative coordinates;
 - the explicit claim-permission enum surface;
 - unique and correctly derived localization keys for every claim permission;
 - the explicit non-player claim-flag surface;
@@ -48,7 +54,8 @@ Workers on GUI PRs should not copy these tests into their branches manually. Rec
 Linux/macOS:
 
 ```bash
-./gradlew test --tests 'net.lumalyte.lg.domain.values.ClaimPermissionTest' \
+./gradlew test --tests 'net.lumalyte.lg.domain.values.AreaTest' \
+  --tests 'net.lumalyte.lg.domain.values.ClaimPermissionTest' \
   --tests 'net.lumalyte.lg.domain.values.FlagTest' \
   --tests 'net.lumalyte.lg.domain.values.ChatChannelContractTest'
 ```
@@ -56,7 +63,7 @@ Linux/macOS:
 Windows PowerShell:
 
 ```powershell
-./gradlew.bat test --tests 'net.lumalyte.lg.domain.values.ClaimPermissionTest' --tests 'net.lumalyte.lg.domain.values.FlagTest' --tests 'net.lumalyte.lg.domain.values.ChatChannelContractTest'
+./gradlew.bat test --tests 'net.lumalyte.lg.domain.values.AreaTest' --tests 'net.lumalyte.lg.domain.values.ClaimPermissionTest' --tests 'net.lumalyte.lg.domain.values.FlagTest' --tests 'net.lumalyte.lg.domain.values.ChatChannelContractTest'
 ```
 
 ## Running the complete unit suite
@@ -77,6 +84,10 @@ Gradle writes local results to:
 GitHub Actions is the durable source for PR-head validation.
 
 ## Interpreting the new failures
+
+### Area geometry mismatch
+
+A claim no longer normalizes corners, contains the expected boundary, reports the same inclusive size, identifies direct adjacency, or spans the same chunks. Treat this as claim-protection behavior: inspect claim lookup, expansion/merge logic, and negative-coordinate behavior before changing expected results.
 
 ### Claim-permission or flag surface mismatch
 
