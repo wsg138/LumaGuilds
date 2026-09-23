@@ -13,6 +13,7 @@ Sentinel Sim is an additional runtime/compatibility layer. It is not the home fo
 The owner-directed test-hardening branch adds focused tests under:
 
 - `src/test/kotlin/net/lumalyte/lg/domain/values/AreaTest.kt`
+- `src/test/kotlin/net/lumalyte/lg/domain/values/PositionTest.kt`
 - `src/test/kotlin/net/lumalyte/lg/domain/values/ClaimPermissionTest.kt`
 - `src/test/kotlin/net/lumalyte/lg/domain/values/FlagTest.kt`
 - `src/test/kotlin/net/lumalyte/lg/domain/values/ChatChannelContractTest.kt`
@@ -24,6 +25,8 @@ They protect contracts that previously had no direct test coverage:
 - four-direction direct adjacency versus gaps/diagonal contact;
 - inclusive block counts and X/Z lengths;
 - occupied chunk enumeration across positive and negative coordinates;
+- 16-block chunk-boundary conversion, including negative coordinates and independent X/Z signs;
+- 3D-position chunk conversion remaining independent of Y;
 - the explicit claim-permission enum surface;
 - unique and correctly derived localization keys for every claim permission;
 - the explicit non-player claim-flag surface;
@@ -55,6 +58,7 @@ Linux/macOS:
 
 ```bash
 ./gradlew test --tests 'net.lumalyte.lg.domain.values.AreaTest' \
+  --tests 'net.lumalyte.lg.domain.values.PositionTest' \
   --tests 'net.lumalyte.lg.domain.values.ClaimPermissionTest' \
   --tests 'net.lumalyte.lg.domain.values.FlagTest' \
   --tests 'net.lumalyte.lg.domain.values.ChatChannelContractTest'
@@ -63,7 +67,7 @@ Linux/macOS:
 Windows PowerShell:
 
 ```powershell
-./gradlew.bat test --tests 'net.lumalyte.lg.domain.values.AreaTest' --tests 'net.lumalyte.lg.domain.values.ClaimPermissionTest' --tests 'net.lumalyte.lg.domain.values.FlagTest' --tests 'net.lumalyte.lg.domain.values.ChatChannelContractTest'
+./gradlew.bat test --tests 'net.lumalyte.lg.domain.values.AreaTest' --tests 'net.lumalyte.lg.domain.values.PositionTest' --tests 'net.lumalyte.lg.domain.values.ClaimPermissionTest' --tests 'net.lumalyte.lg.domain.values.FlagTest' --tests 'net.lumalyte.lg.domain.values.ChatChannelContractTest'
 ```
 
 ## Running the complete unit suite
@@ -85,9 +89,9 @@ GitHub Actions is the durable source for PR-head validation.
 
 ## Interpreting the new failures
 
-### Area geometry mismatch
+### Area geometry or chunk-coordinate mismatch
 
-A claim no longer normalizes corners, contains the expected boundary, reports the same inclusive size, identifies direct adjacency, or spans the same chunks. Treat this as claim-protection behavior: inspect claim lookup, expansion/merge logic, and negative-coordinate behavior before changing expected results.
+A claim no longer normalizes corners, contains the expected boundary, reports the same inclusive size, identifies direct adjacency, spans the same chunks, or maps block coordinates to the expected chunks. Treat this as claim-protection behavior: inspect claim lookup, expansion/merge logic, and especially negative-coordinate behavior before changing expected results.
 
 ### Claim-permission or flag surface mismatch
 
