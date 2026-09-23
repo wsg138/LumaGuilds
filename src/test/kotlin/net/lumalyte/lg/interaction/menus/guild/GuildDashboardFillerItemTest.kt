@@ -3,25 +3,21 @@ package net.lumalyte.lg.interaction.menus.guild
 import org.junit.jupiter.api.Test
 import java.lang.reflect.Modifier
 import java.nio.file.Path
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Verifies that GuildDashboard does not add filler items to inventory slots.
+ * Contracts for the focused Paper 26.2 Guild Home preview.
  *
- * Filler items (gray stained glass panes or Nexo items) are unnecessary
- * clutter — the default Minecraft inventory background provides a clean
- * look. Only navigation buttons and the guild info display should be
- * added to the pane.
+ * The entire home-page presentation is one Nexo glyph texture. There are intentionally no
+ * category item models or filler/hitbox items: Bukkit click mapping makes empty slots interactive.
  */
 internal class GuildDashboardFillerItemTest {
 
     @Test
     fun `GuildDashboard does not have a fillBackground method`() {
         val methods = GuildDashboard::class.java.declaredMethods.map { it.name }
-        assert(!methods.contains("fillBackground")) {
-            "GuildDashboard must not have a fillBackground method. " +
-            "Found: $methods. Filler items are unnecessary clutter."
-        }
+        assertFalse(methods.contains("fillBackground"), "GuildDashboard must not add filler panes: $methods")
     }
 
     @Test
@@ -29,38 +25,41 @@ internal class GuildDashboardFillerItemTest {
         val fields = GuildDashboard::class.java.declaredFields
             .filter { Modifier.isStatic(it.modifiers) && Modifier.isPublic(it.modifiers) }
             .map { it.name }
-        // Also check companion
         val companionFields = GuildDashboard::class.java.declaredClasses
             .filter { it.simpleName == "Companion" }
-            .flatMap { it.declaredFields.map { f -> f.name } }
+            .flatMap { it.declaredFields.map { field -> field.name } }
         val allStatics = fields + companionFields
-        assert(allStatics.none { it.uppercase().contains("FILLER") }) {
-            "GuildDashboard must not have a FILLER constant. " +
-            "Found: $allStatics. Filler items are unnecessary clutter."
-        }
+
+        assertTrue(allStatics.none { it.uppercase().contains("FILLER") }, "Unexpected filler field: $allStatics")
     }
 
     @Test
-    fun `GuildDashboard declares exactly 11 positioned items`() {
-        // The dashboard's open() method places 11 items into the pane:
-        // 10 nav buttons + 1 guild info display.
-        // No filler items should occupy any slots.
-        // Verify by checking the method count of addNavButton calls
-        val source = javaClass.getResourceAsStream("/net/lumalyte/lg/interaction/menus/guild/GuildDashboard.kt")
-            ?.bufferedReader()?.readText()
-        // If we can't read the source, the test is vacuously true
-        // (the important thing is the method doesn't exist, tested above)
-        assert(true)
+    fun `GuildDashboard is one integrated native home skin`() {
+        val source = dashboardSource()
+
+        assertTrue(source.contains("Bukkit.createInventory(newHolder, 54, redesignTitle())"))
+        assertTrue(source.contains("Card.entries"))
+        assertTrue(source.contains("AdventureUtils.NEXO_SERIALIZER"))
+        assertTrue(source.contains("<glyph:guild_redesign_bg_home_6_row>"))
+        assertTrue(source.contains("mapCard("))
+        assertFalse(source.contains("ChestGui("), "Paper 26.2 home preview must not depend on InventoryFramework")
+        assertFalse(source.contains("NexoItemProvider"), "Icons are baked into the background skin")
+        assertFalse(source.contains("inventory.setItem("), "Top GUI slots must remain visually empty")
+        assertFalse(source.contains("lg_redesign_hitbox"), "Empty Bukkit slots are the hitboxes")
     }
 
     @Test
-    fun `GuildDashboard wires statistics below economy in the bottom right slot`() {
-        val source = Path.of(System.getProperty("user.dir"))
-            .resolve("src/main/kotlin/net/lumalyte/lg/interaction/menus/guild/GuildDashboard.kt")
-            .toFile()
-            .readText()
+    fun `GuildDashboard preview clicks stay on the native home screen`() {
+        val source = dashboardSource()
 
-        assertTrue(source.contains("addNavButton(pane, 8, 2, \"lg_nav_statistics\""))
-        assertTrue(source.contains("menuFactory.createGuildStatisticsMenu(menuNavigator, player, guild)"))
+        assertTrue(source.contains("cardBySlot[rawSlot]"))
+        assertTrue(source.contains("player.sendActionBar"))
+        assertFalse(source.contains("createGuildBankMenu(menuNavigator, player, guild)"))
+        assertFalse(source.contains("GuildHomeSectionMenu.Section.MEMBERS"))
     }
+
+    private fun dashboardSource(): String = Path.of(System.getProperty("user.dir"))
+        .resolve("src/main/kotlin/net/lumalyte/lg/interaction/menus/guild/GuildDashboard.kt")
+        .toFile()
+        .readText()
 }
