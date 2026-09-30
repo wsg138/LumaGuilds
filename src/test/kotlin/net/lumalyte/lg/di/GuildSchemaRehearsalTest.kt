@@ -12,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir
 import org.mockbukkit.mockbukkit.MockBukkit
 import java.nio.file.Files
 import java.nio.file.Path
+import java.math.BigInteger
 import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.DriverManager
@@ -33,14 +34,22 @@ class GuildSchemaRehearsalTest {
             DriverManager.getConnection("jdbc:sqlite:$copy").use { connection ->
                 val before = snapshot(connection)
                 SQLiteMigrations(plugin, connection).migrate()
-                assertEquals(before, snapshot(connection), "Stored rows changed during the compatibility rehearsal")
+                val after = snapshot(connection)
+                before.forEach { (table, rows) ->
+                    assertEquals(rows, after[table], "Stored rows changed in $table")
+                }
+                (after.keys - before.keys).forEach { table ->
+                    assertEquals(0L, after.getValue(table).count, "Rehearsal populated new table $table")
+                }
             }
         } finally {
             MockBukkit.unmock()
         }
     }
 
-    private fun snapshot(connection: Connection): Map<String, List<String>> {
+    private data class TableSnapshot(val count: Long, val sum: BigInteger, val xor: BigInteger)
+
+    private fun snapshot(connection: Connection): Map<String, TableSnapshot> {
         val tables = mutableListOf<String>()
         connection.createStatement().use { statement ->
             statement.executeQuery("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").use { result ->
@@ -48,22 +57,28 @@ class GuildSchemaRehearsalTest {
             }
         }
         return tables.associateWith { table ->
-            val rows = mutableListOf<String>()
+            var count = 0L
+            var sum = BigInteger.ZERO
+            var xor = BigInteger.ZERO
+            val mask = BigInteger.ONE.shiftLeft(256).subtract(BigInteger.ONE)
+            val digest = MessageDigest.getInstance("SHA-256")
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT * FROM \"${table.replace("\"", "\"\"")}\"").use { result ->
                     while (result.next()) {
-                        val digest = MessageDigest.getInstance("SHA-256")
                         for (column in 1..result.metaData.columnCount) {
                             val value = result.getBytes(column)
                             digest.update((value?.size ?: -1).toString().toByteArray())
                             digest.update(0.toByte())
                             if (value != null) digest.update(value)
                         }
-                        rows.add(digest.digest().joinToString("") { "%02x".format(it) })
+                        val fingerprint = BigInteger(1, digest.digest())
+                        count++
+                        sum = sum.add(fingerprint).and(mask)
+                        xor = xor.xor(fingerprint)
                     }
                 }
             }
-            rows.sorted()
+            TableSnapshot(count, sum, xor)
         }
     }
 }
