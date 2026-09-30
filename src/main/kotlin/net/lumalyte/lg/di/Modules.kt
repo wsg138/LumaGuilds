@@ -390,7 +390,7 @@ fun claimsModule() = module {
 /**
  * Guild system module - Core guild functionality, ranks, members, and relations
  */
-fun guildsModule() = module {
+fun guildsModule(liteBansAvailable: Boolean = true) = module {
     // Repositories
     single<GuildRepository> { GuildRepositorySQLite(get()) }
     single<RankRepository> { RankRepositorySQLite(get()) }
@@ -449,22 +449,24 @@ fun guildsModule() = module {
             configProvider = { get<net.lumalyte.lg.config.StrikesConfig>() }
         )
     }
-    single<net.lumalyte.lg.infrastructure.litebans.LiteBansStrikeListener> {
-        net.lumalyte.lg.infrastructure.litebans.LiteBansStrikeListener(
-            plugin = get<LumaGuilds>(),
-            guildService = get(),
-            strikeService = get(),
-            membershipHistoryRepository = get(),
-            configProvider = { get<net.lumalyte.lg.config.StrikesConfig>() }
-        )
-    }
-    single<net.lumalyte.lg.infrastructure.litebans.StrikeBackfillService> {
-        net.lumalyte.lg.infrastructure.litebans.StrikeBackfillService(
-            strikeService = get(),
-            membershipHistoryRepository = get(),
-            guildService = get(),
-            configProvider = { get<net.lumalyte.lg.config.StrikesConfig>() }
-        )
+    if (liteBansAvailable) {
+        single<net.lumalyte.lg.infrastructure.litebans.LiteBansStrikeListener> {
+            net.lumalyte.lg.infrastructure.litebans.LiteBansStrikeListener(
+                plugin = get<LumaGuilds>(),
+                guildService = get(),
+                strikeService = get(),
+                membershipHistoryRepository = get(),
+                configProvider = { get<net.lumalyte.lg.config.StrikesConfig>() }
+            )
+        }
+        single<net.lumalyte.lg.infrastructure.litebans.StrikeBackfillService> {
+            net.lumalyte.lg.infrastructure.litebans.StrikeBackfillService(
+                strikeService = get(),
+                membershipHistoryRepository = get(),
+                guildService = get(),
+                configProvider = { get<net.lumalyte.lg.config.StrikesConfig>() }
+            )
+        }
     }
 }
 
@@ -820,7 +822,7 @@ fun integrationModule(plugin: LumaGuilds) = module {
 fun appModule(plugin: LumaGuilds, storage: Storage<*>, claimsEnabled: Boolean = true) =
     listOf(
         coreModule(plugin, storage),
-        guildsModule(),
+        guildsModule(net.lumalyte.lg.infrastructure.litebans.LiteBansEnableListener.liteBansPresent(plugin.server)),
         socialModule(),
         progressionModule(),
         economyModule(),
