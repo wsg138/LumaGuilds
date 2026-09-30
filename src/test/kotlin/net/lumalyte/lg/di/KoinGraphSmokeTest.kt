@@ -62,6 +62,15 @@ internal class KoinGraphSmokeTest {
 
     @Test
     fun `every definition in the real koin graph resolves`() {
+        verifyGraph(claimsEnabled = true)
+    }
+
+    @Test
+    fun `guild services resolve when claims are disabled`() {
+        verifyGraph(claimsEnabled = false)
+    }
+
+    private fun verifyGraph(claimsEnabled: Boolean) {
         val plugin = mockk<LumaGuilds>(relaxed = true)
         every { plugin.dataFolder } returns tempDir.toFile()
         every { plugin.config } returns YamlConfiguration()
@@ -75,12 +84,12 @@ internal class KoinGraphSmokeTest {
         // time and need the schema to exist.
         every { plugin.getComponentLogger() } returns ComponentLogger.logger("LumaGuilds-GraphTest")
         storage.connection.getConnection().use { conn ->
-            SQLiteMigrations(plugin, conn, claimsEnabled = true).migrate()
+            SQLiteMigrations(plugin, conn, claimsEnabled = claimsEnabled).migrate()
         }
 
         try {
             startKoin {
-                modules(appModule(plugin, storage, claimsEnabled = true))
+                modules(appModule(plugin, storage, claimsEnabled = claimsEnabled))
             }
 
             val koin = GlobalContext.get()
