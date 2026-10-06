@@ -65,6 +65,7 @@ data class GuildListConfig(
 data class DiscordGuildRolesConfig(
     var enabled: Boolean = true,
     var roleNameFormat: String = "Guild • <guild>",
+    var enthusiaShadowEnabled: Boolean = false,
 ) {
     init {
         require(roleNameFormat.isNotBlank()) { "discord.guild_roles.role_name_format cannot be blank" }
