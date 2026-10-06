@@ -528,15 +528,21 @@ chapter:
 # Guild Progression System Configuration
 # =====================================
 
-# Optional DiscordSRV guild-role integration.
+# Guild Discord-role integration.
+# DiscordSRV remains authoritative for live role mutations during the migration window.
 # Guilds first unlock a managed Discord role at this level. Saved roles remain unlocked after prestige.
 # Linked Discord accounts are granted/removed automatically with guild membership.
+# The optional Enthusia shadow publisher sends complete Minecraft membership snapshots to
+# EnthusiaStaff for read-only parity checking; it never mutates Discord itself.
 discord:
   guild_roles:
     enabled: true
     minimum_level: 50
     # <guild> is required and is replaced with the live guild name.
     role_name_format: "Guild • <guild>"
+    # Enable only during the reviewed DiscordSRV migration window, after EnthusiaStaff's
+    # managed-role shadow runtime is deployed and its Server Members Intent is enabled.
+    enthusia_shadow_enabled: false
 
 seasonal_elo:
   # Keep disabled until Chapter 2 migration and live war validation are complete.

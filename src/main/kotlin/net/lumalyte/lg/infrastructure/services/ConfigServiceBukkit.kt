@@ -68,6 +68,7 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
             enabled = config.getBoolean("discord.guild_roles.enabled", true),
             minimumLevel = config.getInt("discord.guild_roles.minimum_level", 50),
             roleNameFormat = string("discord.guild_roles.role_name_format", "Guild • <guild>"),
+            enthusiaShadowEnabled = config.getBoolean("discord.guild_roles.enthusia_shadow_enabled", false),
         )
     }
 

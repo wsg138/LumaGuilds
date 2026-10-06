@@ -66,6 +66,7 @@ data class DiscordGuildRolesConfig(
     var enabled: Boolean = true,
     var minimumLevel: Int = 50,
     var roleNameFormat: String = "Guild • <guild>",
+    var enthusiaShadowEnabled: Boolean = false,
 ) {
     init {
         require(minimumLevel in 1..100) { "discord.guild_roles.minimum_level must be between 1 and 100" }

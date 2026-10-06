@@ -61,14 +61,52 @@ The first migration checkpoint intentionally leaves DiscordSRV operational while
 
 This checkpoint does **not** add an Enthusia transport client, change the configured provider, or authorize DiscordSRV removal.
 
+## Checkpoint 2: provider-neutral managed-role SHADOW publication
+
+Implemented on the managed-role migration branch after EnthusiaStaff #342 merged.
+
+- LumaGuilds keeps DiscordSRV as the live role writer during the migration window.
+- `GuildDiscordRoleShadowPublisher` publishes complete guild membership snapshots through the shared `ManagedRolePlatform`.
+- The provider namespace is `luma-guilds`; each guild uses the stable local key `guild:<guild-uuid>`.
+- Claims contain Minecraft UUID membership only. LumaGuilds never receives or resolves Discord user IDs.
+- The persisted DiscordSRV role ID is supplied as an exact migration hint so StaffBot compares against the real legacy role instead of adopting a same-name role.
+- Startup/periodic reconciliation plus guild create, rename, member join/remove, and disband lifecycle events refresh the shadow state.
+- One guild's synchronous publication failure is isolated and counted instead of aborting the entire full pass.
+- The lazily loaded Enthusia backend is invalidated when EnthusiaStaff is disabled/reloaded, avoiding stale classloader/provider reuse.
+- Closing the shadow runtime unregisters Bukkit event handlers before the same instance can be started again.
+- SQLite rehearsal snapshots use SQLite itself so committed WAL state is included in migration verification.
+
+### Enablement
+
+The Luma side is opt-in and defaults off:
+
+```yaml
+discord:
+  guild_roles:
+    enthusia_shadow_enabled: true
+```
+
+The StaffBot managed-role SHADOW runtime must also be enabled separately. DiscordSRV must remain installed and authoritative while parity is being collected.
+
+### Acceptance gate
+
+Do not switch writers from this checkpoint alone. Require repeated complete StaffBot summaries with no unexplained drift:
+
+```text
+managed_role_shadow_summary complete=true ... drift=0 ... invalid_claims=0
+```
+
+Also investigate any `managed_role_shadow_drift`, `managed_role_shadow_incomplete`, or `managed_role_shadow_cycle_failed` records before cutover. A zero-drift SHADOW pass is migration evidence only; it does not authorize DiscordSRV removal or generic managed-role enforcement.
+
 ## Migration sequence
 
-1. Keep the existing DiscordSRV implementation working while the Enthusia platform contract is introduced.
-2. Add an Enthusia-backed adapter behind `DiscordGuildRoleGateway`.
-3. Add contract-focused tests for success, rejection, unavailable platform, retry, stale-link, duplicate/multi-account, and unexpected-member reconciliation behavior.
-4. Run the adapter in a non-production validation environment and compare resulting managed-role membership with the existing DiscordSRV implementation.
-5. Switch configuration to the Enthusia adapter only after parity is established.
-6. Remove direct DiscordSRV/JDA dependencies from LumaGuilds only after the replacement path is accepted.
+1. **Complete:** keep the existing DiscordSRV implementation working while the Enthusia platform contract is introduced.
+2. **Complete for SHADOW:** publish complete desired guild-role membership through the Enthusia managed-role platform while DiscordSRV remains the writer.
+3. **Complete:** cover provider rejection/unavailability and migration lifecycle behavior with focused tests, including per-guild failure isolation.
+4. **Next operational gate:** deploy the reviewed Luma build with SHADOW enabled together with StaffBot managed-role SHADOW and collect repeated complete zero-unexplained-drift scans.
+5. After parity is explicitly accepted, implement/authorize the writer cutover so the shared Enthusia platform owns actual Discord role reconciliation.
+6. Remove direct DiscordSRV/JDA dependencies and legacy account-link compatibility only after the replacement writer is accepted.
+7. Physical DiscordSRV removal remains governed by EnthusiaStaff #264/#268 and the other network consumers; Luma parity alone is not sufficient.
 
 ## Non-goals for this PR
 

@@ -1093,6 +1093,10 @@ class LumaGuilds : JavaPlugin() {
             }, 20L * 60L, 20L * 60L * 5L)
         }
 
+        // Dual-publish complete guild membership snapshots to EnthusiaStaff during the migration
+        // window. This runtime is independently gated and never replaces DiscordSRV mutations.
+        get().get<net.lumalyte.lg.infrastructure.listeners.GuildDiscordRoleShadowRuntime>().start()
+
         // Public Discord guild profiles are independent of Discord role syncing:
         // every LumaGuilds guild is browseable, even when guild_roles is disabled.
         get().get<net.lumalyte.lg.application.services.DiscordGuildProfileSubscription>().subscribe()
@@ -1412,6 +1416,11 @@ class LumaGuilds : JavaPlugin() {
     }
 
     override fun onDisable() {
+        try {
+            get().getOrNull<net.lumalyte.lg.infrastructure.listeners.GuildDiscordRoleShadowRuntime>()?.close()
+        } catch (e: Exception) {
+            logger.warning("Failed to stop Enthusia guild-role shadow runtime: ${e.message}")
+        }
         try {
             get().getOrNull<net.lumalyte.lg.application.services.DiscordAccountLinkSubscription>()?.unsubscribe()
         } catch (e: Exception) {
