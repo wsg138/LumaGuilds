@@ -36,7 +36,13 @@ class GuildDiscordRoleShadowPublisher(
 
     fun reconcileAll(): CompletableFuture<GuildDiscordRoleShadowSummary> {
         if (!enabled()) return completed(GuildDiscordRoleShadowSummary())
-        val work = guildService.getAllGuilds().map { guild -> reconcileGuild(guild.id) }
+        val work = guildService.getAllGuilds().map { guild ->
+            try {
+                reconcileGuild(guild.id)
+            } catch (_: RuntimeException) {
+                completed(GuildDiscordRoleShadowSummary(failures = 1))
+            }
+        }
         return combine(work)
     }
 
