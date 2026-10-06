@@ -31,11 +31,11 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 /**
- * Guild Progression Menu — shows guild level, daily XP caps per source, and rewards.
+ * Guild Progression Menu — shows guild level, period-aware XP caps per source, and rewards.
  *
  * 6-row layout with a dedicated sidebar and a row-major source grid.
  *
- * Row 0: [     Guild Level + XP bar + today's total     ][Back][Close]
+ * Row 0: [ Guild Level + XP bar + daily/weekly totals ][Back]
  * Row 1: [Rank] ─── 24-slot paginated source grid ───────
  * Row 2: [Srcs]
  * Row 3: [Perks]
@@ -118,12 +118,11 @@ class GuildProgressionMenu(
         addPerksInfo(pane, 0, 3)
         addPrestigeInfo(pane, 0, 4)
 
-        // ---- Back / Close (top right) ----
-        addBackButton(pane, 8, 0)
-        addCloseButton(pane, 8, 1)
+        // ---- Back (bottom centre, same spot as every guild menu) ----
+        addBackButton(pane, 4, 5)
 
         // ---- Page navigation (row 5) ----
-        if (currentPage > 0) addPreviousPageButton(pane, 7, 5)
+        if (currentPage > 0) addPreviousPageButton(pane, 0, 5)
         if (currentPage + 1 < totalPages) addNextPageButton(pane, 8, 5)
 
         // ---- Source grid (paginated) ----
@@ -155,8 +154,15 @@ class GuildProgressionMenu(
 
     private fun addGuildLevelHeader(pane: StaticPane, prog: GuildProgressionDisplay, sourceUsage: List<SourceUsageView>) {
         val (_, totalXp, currentXp, neededXp, perksCount) = prog
-        val percent = if (neededXp > 0) (currentXp.toDouble() / neededXp.toDouble() * 100).toInt() else 0
+        val maxLevel = neededXp <= 0
+        val percent = if (maxLevel) 100 else (currentXp.toDouble() / neededXp.toDouble() * 100).toInt()
         val totalToday = sourceUsage.filter { it.period == CapPeriod.DAILY }.sumOf { it.awardedXp }
+        val totalThisWeek = sourceUsage.filter { it.period == CapPeriod.WEEKLY }.sumOf { it.awardedXp }
+        val progressLine = if (maxLevel) {
+            lang.gui("menu.guild_progression.level.maxed")
+        } else {
+            lang.gui("menu.guild_progression.level.progress", "current" to currentXp, "needed" to neededXp, "percent" to percent)
+        }
 
         val bars = buildProgressBar(percent, 20)
         val item = NexoItemProvider.getItemStackOrFallback("lg_level") {
@@ -164,9 +170,10 @@ class GuildProgressionMenu(
         }.also { it.editMeta { meta ->
             meta.displayName(lang.gui("menu.guild_progression.level.name", "level" to prog.level))
             val lore = mutableListOf(
-                lang.gui("menu.guild_progression.level.progress", "current" to currentXp, "needed" to neededXp, "percent" to percent),
+                progressLine,
                 lang.gui("menu.guild_progression.level.bar", "bar" to bars),
-                lang.gui("menu.guild_progression.level.today", "xp" to totalToday),
+                lang.gui("menu.guild_progression.level.daily_pools", "xp" to totalToday),
+                lang.gui("menu.guild_progression.level.weekly_pools", "xp" to totalThisWeek),
                 Component.empty(),
                 lang.gui("menu.guild_progression.level.perks", "count" to perksCount),
                 lang.gui("menu.guild_progression.level.total", "xp" to totalXp)
@@ -201,8 +208,9 @@ class GuildProgressionMenu(
         val usedXp = usage.awardedXp
         val percent = if (cap != null && cap > 0) (usedXp.toDouble() / cap.toDouble() * 100).toInt().coerceAtMost(100) else 0
 
-        val nexoId = sourceToPresentationIconId(source, usage.pool)
-        val material = sourceToMaterial(source)
+        // XP sources deliberately use plain vanilla items (not Nexo art): they read at a glance and
+        // match what players already know from the game.
+        val material = sourceToVanillaMaterial(source, usage.pool)
         val name = sourcePoolDisplayName(usage.pool)
 
         val bars = buildProgressBar(percent, 10)
@@ -213,9 +221,7 @@ class GuildProgressionMenu(
             else -> "available"
         }
 
-        val item = NexoItemProvider.getItemStackOrFallback(nexoId) {
-            ItemStack.of(material)
-        }.also { it.editMeta { meta ->
+        val item = ItemStack.of(material).also { it.editMeta { meta ->
             meta.displayName(lang.gui("menu.guild_progression.source.name", "source" to name))
             val lore = mutableListOf<Component>()
             if (cap != null) {
@@ -226,9 +232,14 @@ class GuildProgressionMenu(
                     else -> lang.gui("menu.guild_progression.source.progress.available", "bar" to bars, "percent" to percent)
                 }
                 lore.add(progress)
-                lore.add(lang.gui("menu.guild_progression.source.today", "today" to usedXp, "cap" to cap))
+                val usageLine = when (usage.period) {
+                    CapPeriod.DAILY -> lang.gui("menu.guild_progression.source.daily_period", "used" to usedXp, "cap" to cap)
+                    CapPeriod.WEEKLY -> lang.gui("menu.guild_progression.source.weekly_period", "used" to usedXp, "cap" to cap)
+                    CapPeriod.UNLIMITED -> lang.gui("menu.guild_progression.source.unlimited")
+                }
+                lore.add(usageLine)
             } else {
-                lore.add(lang.gui("menu.guild_progression.source.tracked", "xp" to usedXp))
+                lore.add(lang.gui("menu.guild_progression.source.unlimited"))
             }
             meta.lore(lore)
         }}
@@ -270,7 +281,9 @@ class GuildProgressionMenu(
     private fun addPerksInfo(pane: StaticPane, x: Int, y: Int) {
         val chapterTwo = rewardState as? GuildRewardRead.Available
         if (chapterTwo != null) {
-            val item = ItemStack.of(Material.DIAMOND).also { it.editMeta { meta ->
+            val item = NexoItemProvider.getItemStackOrFallback("lg_reward") {
+                ItemStack.of(Material.DIAMOND)
+            }.also { it.editMeta { meta ->
                 meta.displayName(lang.gui("chapter_two_rewards.title"))
                 meta.lore(listOf(lang.gui("chapter_two_rewards.explanation"), lang.gui("chapter_two_rewards.view")))
             } }
@@ -453,13 +466,6 @@ class GuildProgressionMenu(
         pane.addItem(GuiItem(item) { menuNavigator.goBack() }, x, y)
     }
 
-    private fun addCloseButton(pane: StaticPane, x: Int, y: Int) {
-        val item = NexoItemProvider.getItemStackOrFallback("lg_close") {
-            ItemStack.of(Material.BARRIER).name(lang.gui("menu.guild_progression.navigation.close"))
-        }.also { it.editMeta { meta -> meta.displayName(lang.gui("menu.guild_progression.navigation.close")) }}
-        pane.addItem(GuiItem(item) { menuNavigator.clearMenuStack(); player.closeInventory() }, x, y)
-    }
-
     private fun addPreviousPageButton(pane: StaticPane, x: Int, y: Int) {
         val item = NexoItemProvider.getItemStackOrFallback("lg_page_prev") {
             ItemStack.of(Material.ARROW).name(lang.gui("menu.guild_progression.navigation.previous_fallback"))
@@ -517,6 +523,12 @@ class GuildProgressionMenu(
         ExperienceSource.CLAIM_DESTROYED -> "lg_claim_removed"
         ExperienceSource.WEEKLY_ACTIVITY -> "lg_weekly_activity"
         ExperienceSource.ADMIN_BONUS -> "lg_admin_bonus"
+    }
+
+    private fun sourceToVanillaMaterial(source: ExperienceSource, pool: String): Material = when (pool) {
+        "ORE" -> Material.DIAMOND_ORE
+        "CRAFTING" -> Material.CRAFTING_TABLE
+        else -> sourceToMaterial(source)
     }
 
     private fun sourceToMaterial(source: ExperienceSource): Material = when (source) {

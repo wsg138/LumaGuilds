@@ -317,7 +317,7 @@ WHEN a guild withdrawal is offered THEN THE SYSTEM SHALL preview the calculated 
 **Event-driven.** WHEN a guild member logs into the server THEN THE SYSTEM SHALL notify the guild in-game.
 
 ### REQ-063
-**State-driven.** THE SYSTEM SHALL display each member's current guild rank next to their name in guild chat (restoring the legacy feature).
+**State-driven.** THE SYSTEM SHALL display each member's current guild rank next to their name in guild chat by default. Guild leaders or members with MANAGE_GUILD_SETTINGS SHALL be able to toggle rank display for the entire guild; the setting SHALL persist across restarts and apply to the next guild-chat message without changing other guilds, public, ally, or officer chat. Guild rank names SHALL support legacy color/format codes and hex colors (including bare `#RRGGBB` and `&#RRGGBB`), with a maximum of 24 visible characters and 255 stored characters. Rank creation/editing on Java and Bedrock SHALL use the same validation; color changes SHALL NOT create duplicate visible rank names or change rank IDs, member assignments, permission sets, or claim-permission profiles. Validation errors SHALL display readable text. Per-message RoseChat formatting SHALL preserve every option supplied by the runtime API, including newer bypass flags, without linking to a version-specific record constructor.
 
 ### REQ-064
 **Conditional.** GIVEN guild leadership, THE SYSTEM SHALL provide a dedicated private chat channel for guild admins/leadership only.
@@ -341,7 +341,7 @@ WHEN a guild withdrawal is offered THEN THE SYSTEM SHALL preview the calculated 
 **Event-driven.** WHEN a player clicks the Enemy/Ally sections of `/g info` THEN THE SYSTEM SHALL expand to the full guild list (currently only top 3, no way to view the rest).
 
 ### REQ-071
-**Event-driven.** WHEN a guild is created, THEN THE SYSTEM SHALL create/link a Discord role immediately and dynamically grant/remove it for Discord-linked players as they join/leave the guild or link/unlink their Discord account.
+**Event-driven.** WHEN a guild first reaches the configured minimum guild level (default 50), THEN THE SYSTEM SHALL create/link a Discord role and dynamically grant/remove it for Discord-linked players as they join/leave the guild or link/unlink their Discord account. A guild without a saved role link below the minimum SHALL not gain a managed Discord role. An existing saved guild-to-role link SHALL remain unlocked after a level reduction, prestige reset, or increased minimum, and startup reconciliation SHALL preserve and repair that role. Disbanded guild roles SHALL still be removed.
 
 ### REQ-072
 **Event-driven.** WHEN a guild edits its description THEN THE SYSTEM SHALL accept up to 200 characters of safe display MiniMessage formatting and SHALL recognize HTTPS Discord invite URLs from `discord.gg/<code>` and `discord.com/invite/<code>`. Discord invite URLs SHALL be the only external URLs promoted to clickable `OPEN_URL` components; arbitrary URLs SHALL remain inert text. User-authored interactive MiniMessage event tags including `click`, `hover`, and `insertion` SHALL be rejected at every write path. Java guild-info SHALL expose detected Discord invites through a clickable chat component, while Bedrock SHALL preserve the visible invite URL as plain text.
