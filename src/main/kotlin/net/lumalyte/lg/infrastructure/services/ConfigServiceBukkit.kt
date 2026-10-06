@@ -67,6 +67,7 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
         return DiscordGuildRolesConfig(
             enabled = config.getBoolean("discord.guild_roles.enabled", true),
             roleNameFormat = string("discord.guild_roles.role_name_format", "Guild • <guild>"),
+            enthusiaShadowEnabled = config.getBoolean("discord.guild_roles.enthusia_shadow_enabled", false),
         )
     }
 
