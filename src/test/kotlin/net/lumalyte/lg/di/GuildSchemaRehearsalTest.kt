@@ -10,9 +10,8 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.mockbukkit.mockbukkit.MockBukkit
-import java.nio.file.Files
-import java.nio.file.Path
 import java.math.BigInteger
+import java.nio.file.Path
 import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.DriverManager
@@ -26,7 +25,7 @@ class GuildSchemaRehearsalTest {
         val source = System.getenv("ES_GUILD_REHEARSAL_DATABASE")
         assumeTrue(!source.isNullOrBlank(), "An offline database snapshot is required")
         val copy = directory.resolve("rehearsal.db")
-        Files.copy(Path.of(source!!), copy)
+        copyDatabase(Path.of(source!!), copy)
         MockBukkit.mock()
         try {
             val plugin = mockk<LumaGuilds>(relaxed = true)
@@ -44,6 +43,15 @@ class GuildSchemaRehearsalTest {
             }
         } finally {
             MockBukkit.unmock()
+        }
+    }
+
+    private fun copyDatabase(source: Path, target: Path) {
+        DriverManager.getConnection("jdbc:sqlite:${source.toAbsolutePath()}").use { connection ->
+            val escapedTarget = target.toAbsolutePath().toString().replace("'", "''")
+            connection.createStatement().use { statement ->
+                statement.execute("VACUUM INTO '$escapedTarget'")
+            }
         }
     }
 
