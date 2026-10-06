@@ -1,5 +1,7 @@
 package net.lumalyte.lg.infrastructure.services
 
+import net.lumalyte.lg.utils.RankNameContent
+
 import net.badgersmc.nexus.i18n.LangService
 import net.lumalyte.lg.infrastructure.i18n.plain
 import net.kyori.adventure.text.Component
@@ -31,7 +33,8 @@ class ChatServiceBukkit(
     private val rankService: RankService,
     private val preferenceRepository: PlayerPartyPreferenceRepository,
     private val partyRepository: PartyRepository,
-    private val lang: LangService
+    private val lang: LangService,
+    private val chatRankSettings: GuildChatRankSettingsService,
 ) : ChatService {
 
     private val logger = LoggerFactory.getLogger(ChatServiceBukkit::class.java)
@@ -90,9 +93,14 @@ class ChatServiceBukkit(
         }
     }
 
+    private fun formatGuildTag(guild: Guild, brackets: Boolean = true): String {
+        val displayedGuild = guild.copy(emoji = nexoEmojiService.getEmojiPlaceholder(guild.emoji))
+        return GuildDisplayUtils.createGuildTag(displayedGuild, brackets)
+    }
+
     private fun formatAnnouncement(guild: Guild, name: String, message: String, colorDigit: Char): Component {
         val headerColor = colorDigit.takeIf { it in '0'..'9' } ?: '6'
-        val guildTag = GuildDisplayUtils.createGuildTag(guild)
+        val guildTag = formatGuildTag(guild)
         return when (headerColor) {
             '0' -> lang.msg("notification.chat.announcement.black", "guild" to guildTag, "player" to name, "message" to message)
             '1' -> lang.msg("notification.chat.announcement.dark_blue", "guild" to guildTag, "player" to name, "message" to message)
@@ -143,7 +151,7 @@ class ChatServiceBukkit(
             }
             
             val pingerName = Bukkit.getPlayer(pingerId)?.name ?: UNKNOWN_PLAYER
-            val guildDisplayName = GuildDisplayUtils.createGuildTag(guild)
+            val guildDisplayName = formatGuildTag(guild)
             
             val formattedMessage = if (message != null) {
                 lang.msg("notification.chat.ping.message", "guild" to guildDisplayName, "player" to pingerName, "message" to message)
@@ -259,17 +267,18 @@ class ChatServiceBukkit(
         val primaryGuild = senderGuilds.firstOrNull()?.let { guildService.getGuild(it) }
         
         val guildTag = if (primaryGuild != null) {
-            GuildDisplayUtils.createGuildTag(primaryGuild, brackets = false)
+            formatGuildTag(primaryGuild, brackets = false)
         } else {
             ""
         }
         
         return when (channel) {
             ChatChannel.GUILD -> {
+                val guildChatName = guildChatPlayer(senderId, senderName, primaryGuild)
                 if (guildTag.isNotEmpty()) {
-                    lang.plain("notification.chat.guild.with_tag", "tag" to guildTag, "player" to senderName, "message" to processedMessage)
+                    lang.plain("notification.chat.guild.with_tag", "tag" to guildTag, "player" to guildChatName, "message" to processedMessage)
                 } else {
-                    lang.plain("notification.chat.guild.without_tag", "player" to senderName, "message" to processedMessage)
+                    lang.plain("notification.chat.guild.without_tag", "player" to guildChatName, "message" to processedMessage)
                 }
             }
             ChatChannel.ALLY -> {
@@ -300,13 +309,16 @@ class ChatServiceBukkit(
                 if (configService.loadConfig().chat.coloredChatEnabled) value else stripLegacyColors(value)
             }
         val primaryGuild = memberService.getPlayerGuilds(senderId).firstOrNull()?.let(guildService::getGuild)
-        val guildTag = primaryGuild?.let { GuildDisplayUtils.createGuildTag(it, brackets = false) }.orEmpty()
+        val guildTag = primaryGuild?.let { formatGuildTag(it, brackets = false) }.orEmpty()
 
         return when (channel) {
-            ChatChannel.GUILD -> if (guildTag.isNotEmpty()) {
-                lang.msg("notification.chat.guild.with_tag", "tag" to guildTag, "player" to senderName, "message" to processedMessage)
-            } else {
-                lang.msg("notification.chat.guild.without_tag", "player" to senderName, "message" to processedMessage)
+            ChatChannel.GUILD -> {
+                val guildChatName = guildChatPlayer(senderId, senderName, primaryGuild)
+                if (guildTag.isNotEmpty()) {
+                    lang.msg("notification.chat.guild.with_tag", "tag" to guildTag, "player" to guildChatName, "message" to processedMessage)
+                } else {
+                    lang.msg("notification.chat.guild.without_tag", "player" to guildChatName, "message" to processedMessage)
+                }
             }
             ChatChannel.ALLY -> if (guildTag.isNotEmpty()) {
                 lang.msg("notification.chat.ally.with_tag", "tag" to guildTag, "player" to senderName, "message" to processedMessage)
@@ -389,6 +401,13 @@ class ChatServiceBukkit(
                 lang.plain("notification.chat.party.without_tag", "player" to senderName, "message" to message)
             }
         }
+    }
+
+    private fun guildChatPlayer(senderId: UUID, senderName: String, guild: Guild?): String {
+        if (guild == null || !chatRankSettings.ranksVisible(guild.id)) return senderName
+        val rank = memberService.getPlayerRankId(senderId, guild.id)?.let(rankService::getRank) ?: return senderName
+        return "<dark_gray>[<aqua>" + RankNameContent.miniMessage(rank.name) +
+            "<reset><dark_gray>]<reset> $senderName"
     }
 
 

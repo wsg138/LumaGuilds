@@ -11,7 +11,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.asExecutor
 import net.lumalyte.lg.application.services.ActivityType
 import net.lumalyte.lg.application.services.ConfigService
 import net.lumalyte.lg.domain.values.ExperienceSource
@@ -24,6 +23,7 @@ import net.lumalyte.lg.application.persistence.BlockProvenanceRepository
 import net.lumalyte.lg.config.ProgressionConfig
 import net.lumalyte.lg.api.events.GuildBankDepositEvent
 import net.lumalyte.lg.api.events.GuildDisbandedEvent
+import net.lumalyte.lg.api.events.GuildExplorationMilestoneEvent
 import net.lumalyte.lg.api.events.GuildMemberJoinEvent
 import net.lumalyte.lg.api.events.GuildMemberRemovedEvent
 import net.lumalyte.lg.infrastructure.services.AsyncTaskService
@@ -54,7 +54,6 @@ import org.slf4j.LoggerFactory
 import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CompletableFuture
 import io.papermc.paper.event.inventory.ItemCraftedEvent
@@ -80,6 +79,7 @@ class ProgressionEventListener(
     private val blockProvenanceRepository: BlockProvenanceRepository,
     private val plugin: Plugin,
     private val virtualDispatcher: CoroutineDispatcher,
+    private val provenanceOperations: BlockProvenanceOperationQueue,
 ) : Listener {
 
     private val logger = LoggerFactory.getLogger(ProgressionEventListener::class.java)
@@ -92,7 +92,6 @@ class ProgressionEventListener(
     private val playerGuildCache = ConcurrentHashMap<UUID, Set<UUID>>()
     private val pendingGuildXp = ConcurrentHashMap<GuildXpKey, AtomicInteger>()
     private val sourceXpValues = ConcurrentHashMap<ExperienceSource, Int>()
-    private val provenanceOperations = BlockProvenanceOperationQueue(virtualDispatcher.asExecutor())
     @Volatile private var cachedProgressionConfig: ProgressionConfig = configService.loadConfig().progression
     @Volatile private var classifier = ProgressionActivityClassifier(
         cachedProgressionConfig.materialPools,
@@ -269,10 +268,6 @@ class ProgressionEventListener(
             val position = BlockPosition(block.world.uid, block.x, block.y, block.z)
             provenanceOperations.submit(position) {
                 blockProvenanceRepository.recordPlayerPlaced(position)
-            }.whenComplete { _, error ->
-                if (error != null) {
-                    logger.warn("Failed to persist block provenance at $position", error)
-                }
             }
 
             // Provenance is a world-state fact, not an XP eligibility decision. Track
@@ -483,12 +478,10 @@ class ProgressionEventListener(
             if (removeAfterRead) blockProvenanceRepository.remove(position)
             placed
         }.whenComplete { placed, error ->
+            // The shared queue reports its first failure once and latches closed.
+            if (error != null) return@whenComplete
             Bukkit.getScheduler().runTask(plugin, Runnable {
-                if (error != null) {
-                    logger.warn("Failed to resolve block provenance at $position", error)
-                } else {
-                    callback(placed)
-                }
+                callback(placed)
             })
         }
     }
@@ -536,6 +529,13 @@ class ProgressionEventListener(
         if (classifier.isExplorationMilestone(key.namespace, key.key)) {
             requestPlayerActivity(event.player, units = 1, source = ExperienceSource.EXPLORATION_MILESTONE)
         }
+    }
+
+    /** External advancement providers publish only newly-completed milestones through the public API event. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onExternalExplorationMilestone(event: GuildExplorationMilestoneEvent) {
+        if (!eligible(event.player)) return
+        requestPlayerActivity(event.player, units = 1, source = ExperienceSource.EXPLORATION_MILESTONE)
     }
 
     private fun lunarMultiplier(player: Player): Int {
@@ -624,23 +624,5 @@ class ProgressionEventListener(
 
     companion object {
         private const val FLUSH_INTERVAL_MS = 5_000L
-    }
-}
-
-internal class BlockProvenanceOperationQueue(private val executor: Executor) {
-    private val tails = ConcurrentHashMap<BlockPosition, CompletableFuture<*>>()
-
-    fun <T> submit(position: BlockPosition, operation: () -> T): CompletableFuture<T> {
-        var queued: CompletableFuture<T>? = null
-        tails.compute(position) { _, previous ->
-            CompletableFuture.supplyAsync({
-                previous?.handle { _, _ -> null }?.join()
-                operation()
-            }, executor).also { queued = it }
-        }
-
-        return checkNotNull(queued).also { future ->
-            future.whenComplete { _, _ -> tails.remove(position, future) }
-        }
     }
 }

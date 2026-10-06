@@ -400,6 +400,9 @@ fun claimsModule() = module {
 fun guildsModule() = module {
     // Repositories
     single<GuildRepository> { GuildRepositorySQLite(get()) }
+    single<net.lumalyte.lg.application.persistence.GuildHomeActivationRepository> {
+        net.lumalyte.lg.infrastructure.persistence.guilds.GuildHomeActivationRepositorySQL(get())
+    }
     single<RankRepository> { RankRepositorySQLite(get()) }
     single<net.lumalyte.lg.application.persistence.RankClaimPermissionProfileRepository> {
         net.lumalyte.lg.infrastructure.persistence.guilds.RankClaimPermissionProfileRepositorySQL(get())
@@ -413,7 +416,7 @@ fun guildsModule() = module {
     single<MembershipHistoryRepository> { MembershipHistoryRepositorySQLite(get()) }
 
     // Services
-    single<GuildService> { GuildServiceBukkit(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single<GuildService> { GuildServiceBukkit(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single<RankService> {
         RankServiceBukkit(
             get(), get(), get(), get(), get(),
@@ -511,10 +514,14 @@ fun socialModule() = module {
     single<ChatSettingsRepository> {
         ChatSettingsRepositorySQLite(get(), get<ConfigService>().loadConfig().chat.defaultChannelVisibility)
     }
+    single<net.lumalyte.lg.application.persistence.GuildChatRankSettingsRepository> {
+        net.lumalyte.lg.infrastructure.persistence.guilds.GuildChatRankSettingsRepositorySQL(get())
+    }
+    single { net.lumalyte.lg.application.services.GuildChatRankSettingsService(get(), get()) }
 
     // Services
     single<PartyService> { PartyServiceBukkit(get(), get(), get(), get(), get()) }
-    single<ChatService> { ChatServiceBukkit(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single<ChatService> { ChatServiceBukkit(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 
     // Listeners
     single<ChatInputListener> { ChatInputListener() }
@@ -554,16 +561,34 @@ fun socialModule() = module {
         }
     }
     single {
-        net.lumalyte.lg.application.services.GuildDiscordRoleService(get(), get(), get(), get(), get())
+        net.lumalyte.lg.application.services.GuildDiscordRoleService(get(), get(), get(), get(), get(), get())
     }
     single<net.lumalyte.lg.infrastructure.listeners.GuildDiscordRoleListener> {
         net.lumalyte.lg.infrastructure.listeners.GuildDiscordRoleListener(get())
     }
     single<net.lumalyte.lg.application.services.DiscordAccountLinkSubscription> {
         if (org.bukkit.Bukkit.getPluginManager().getPlugin("DiscordSRV") != null) {
-            net.lumalyte.lg.infrastructure.services.DiscordSrvAccountLinkSubscription(get())
+            net.lumalyte.lg.infrastructure.services.DiscordSrvAccountLinkSubscription(
+                get(),
+                get<java.util.concurrent.ExecutorService>(named("VirtualThreadExecutor")),
+            )
         } else {
             net.lumalyte.lg.infrastructure.services.UnavailableDiscordAccountLinkSubscription()
+        }
+    }
+    single<net.lumalyte.lg.application.services.DiscordGuildProfileSubscription> {
+        if (org.bukkit.Bukkit.getPluginManager().getPlugin("DiscordSRV") != null) {
+            net.lumalyte.lg.infrastructure.services.DiscordSrvGuildProfileSubscription(
+                plugin = get(),
+                profiles = get(),
+                guildListService = get(),
+                killService = get(),
+                warService = get(),
+                seasonalElo = get(),
+                executor = get<java.util.concurrent.ExecutorService>(named("VirtualThreadExecutor")),
+            )
+        } else {
+            net.lumalyte.lg.infrastructure.services.UnavailableDiscordGuildProfileSubscription()
         }
     }
 
@@ -648,6 +673,11 @@ fun progressionModule() = module {
     single<net.lumalyte.lg.application.persistence.BlockProvenanceRepository> {
         net.lumalyte.lg.infrastructure.persistence.guilds.BlockProvenanceRepositorySQLite(get())
     }
+    single {
+        net.lumalyte.lg.infrastructure.listeners.BlockProvenanceOperationQueue(
+            get<ExecutorService>(named("VirtualThreadExecutor"))
+        )
+    }
 
     // Services
     single<KillService> { KillServiceBukkit(get()) }
@@ -678,8 +708,14 @@ fun progressionModule() = module {
         net.lumalyte.lg.infrastructure.services.PacketEventsToastSender(get<LumaGuilds>())
     }
     single<net.lumalyte.lg.application.services.QuestCompletionNotifier> {
+        val plugin = get<LumaGuilds>()
         net.lumalyte.lg.infrastructure.services.QuestCompletionNotifierBukkit(
             get(), get(), get(), get(), get(),
+            onMainThread = { action ->
+                if (org.bukkit.Bukkit.isPrimaryThread()) action()
+                else org.bukkit.Bukkit.getScheduler().callSyncMethod(plugin) { action() }
+                    .get(5, java.util.concurrent.TimeUnit.SECONDS)
+            },
         )
     }
     single<net.lumalyte.lg.application.services.GuildDisbandAnnouncementService> {
@@ -730,7 +766,26 @@ fun progressionModule() = module {
         )
     }
     single {
-        net.lumalyte.lg.application.services.GuildListService(get(), get(), get(), get())
+        net.lumalyte.lg.application.services.GuildListService(
+            get(),
+            get(),
+            get(),
+            get(),
+            get<java.util.concurrent.ExecutorService>(named("VirtualThreadExecutor")),
+        )
+    }
+    single {
+        net.lumalyte.lg.application.services.GuildDiscordProfileService(
+            guildService = get(),
+            memberService = get(),
+            rankService = get(),
+            progressionRepository = get(),
+            prestigeService = get(),
+            relationService = get(),
+            playerNameResolver = { playerId: java.util.UUID ->
+                org.bukkit.Bukkit.getOfflinePlayer(playerId).name
+            },
+        )
     }
     single {
         net.lumalyte.lg.infrastructure.services.SpawnBannerServiceBukkit(
@@ -803,9 +858,10 @@ single {
             blockProvenanceRepository = get(),
             plugin = get(),
             virtualDispatcher = get(named("VirtualDispatcher")),
+            provenanceOperations = get(),
         )
     }
-    single { net.lumalyte.lg.infrastructure.listeners.QuestProgressListener(get(), get(), get()) }
+    single { net.lumalyte.lg.infrastructure.listeners.QuestProgressListener(get(), get(), get(), get()) }
 }
 
 /**
@@ -846,6 +902,8 @@ fun economyModule() = module {
                 }
                 override fun canDeposit(playerId: java.util.UUID, guildId: java.util.UUID) =
                     allowed(playerId, guildId, net.lumalyte.lg.domain.entities.RankPermission.DEPOSIT_TO_BANK)
+                override fun canDepositPhysical(playerId: java.util.UUID, guildId: java.util.UUID) =
+                    members.getByPlayerAndGuild(playerId, guildId) != null
                 override fun canWithdraw(playerId: java.util.UUID, guildId: java.util.UUID) =
                     allowed(playerId, guildId, net.lumalyte.lg.domain.entities.RankPermission.WITHDRAW_FROM_BANK)
             },
@@ -924,6 +982,11 @@ fun economyModule() = module {
             { get<ConfigService>().loadConfig() },
             get<net.lumalyte.lg.infrastructure.services.BukkitPhysicalGoldAdapter>(),
             get<net.lumalyte.lg.application.services.GuildGoldService>(),
+        )
+    }
+    single {
+        net.lumalyte.lg.application.services.GuildHomeActivationService(
+            get(), get(), { get<ConfigService>().loadConfig() },
         )
     }
     single<BankService> { BankServiceBukkit(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }

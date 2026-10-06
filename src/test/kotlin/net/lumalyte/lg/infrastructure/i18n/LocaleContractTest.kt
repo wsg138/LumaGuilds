@@ -82,6 +82,8 @@ class LocaleContractTest {
         )
     }.toSet()
     private val localizedHelperKeys = setOf(
+        // Bank sub-menus (budget, history, security, statistics) read it through getLocalizedString().
+        "menu.bank.back_to_control_panel",
         "menu.guild_mode.cooldown.expired",
         "menu.guild_mode.cooldown.hostile",
         "menu.guild_mode.cooldown.lock_expired",
@@ -135,6 +137,19 @@ class LocaleContractTest {
         }
 
         assertEquals(emptyList<String>(), violations)
+    }
+
+    @Test
+    fun `rank legacy conversion utilities have exact file classifications`() {
+        listOf(
+            "net/lumalyte/lg/utils/RankNameContent.kt",
+            "net/lumalyte/lg/infrastructure/services/GuildRankChatFormatter.kt",
+        ).forEach { file ->
+            assertEquals(PlayerTextClassification.COLOR_CODE_UTILITY,
+                LocaleSourceScanner.classificationFor(projectRoot.resolve("src/main/kotlin/$file")))
+        }
+        assertEquals(null, LocaleSourceScanner.classificationFor(
+            projectRoot.resolve("src/main/kotlin/net/lumalyte/lg/utils/OtherRankText.kt")))
     }
 
     @Test

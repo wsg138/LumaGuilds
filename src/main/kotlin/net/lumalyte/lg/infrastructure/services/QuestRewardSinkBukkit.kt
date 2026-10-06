@@ -15,7 +15,7 @@ import java.util.UUID
 
 class QuestRewardSinkBukkit(
     private val progressionService: ProgressionService,
-    plugin: Plugin,
+    private val plugin: Plugin,
 ) : QuestRewardSink {
     private val rewardTransactionKey = NamespacedKey(plugin, "quest_reward_tx")
     private val rewardItemKey = NamespacedKey(plugin, "quest_reward_item")
@@ -33,6 +33,11 @@ class QuestRewardSinkBukkit(
         rewards: List<QuestItemReward>,
         transactionId: UUID,
     ): Boolean {
+        if (!Bukkit.isPrimaryThread()) {
+            return Bukkit.getScheduler().callSyncMethod(plugin) {
+                awardItems(actorId, rewards, transactionId)
+            }.get()
+        }
         if (rewards.isEmpty()) return true
         val player = Bukkit.getPlayer(actorId) ?: return false
         val expected = rewards.groupingBy { it.itemId }.fold(0) { total, reward ->
@@ -48,9 +53,8 @@ class QuestRewardSinkBukkit(
             )
             if (missing <= 0) continue
 
-            val template = NexoItemProvider.getItemStackOrFallback(itemId) {
-                ItemStack.of(Material.CHEST)
-            }
+            // Untagged on purpose: reward items go into inventories and must stack normally.
+            val template = NexoItemProvider.getItemStack(itemId) ?: ItemStack.of(Material.CHEST)
             while (missing > 0) {
                 val item = template.clone().apply {
                     amount = missing.coerceAtMost(maxStackSize)
@@ -85,6 +89,10 @@ class QuestRewardSinkBukkit(
     }
 
     override fun finalizeItems(actorId: UUID, transactionId: UUID) {
+        if (!Bukkit.isPrimaryThread()) {
+            Bukkit.getScheduler().callSyncMethod(plugin) { finalizeItems(actorId, transactionId) }.get()
+            return
+        }
         val player = Bukkit.getPlayer(actorId) ?: return
         player.inventory.storageContents.filterNotNull().forEach { item ->
             val data = item.itemMeta.persistentDataContainer

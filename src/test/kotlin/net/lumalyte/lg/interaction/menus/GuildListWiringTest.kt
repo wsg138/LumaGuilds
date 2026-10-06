@@ -30,14 +30,38 @@ class GuildListWiringTest {
             "src/main/kotlin/net/lumalyte/lg/interaction/menus/bedrock/BedrockGuildListMenu.kt"
         ).readText()
 
-        assertTrue(java.contains("guildListService.getPage("))
+        assertTrue(java.contains("guildListService.getPageAsync("))
         assertTrue(bedrock.contains("guildListService.getPage("))
+        assertTrue(bedrock.contains("override fun shouldBuildAsync(): Boolean = true"))
         assertTrue(java.contains("guildListService.configuredPageSize()"))
         assertTrue(bedrock.contains("guildListService.configuredPageSize()"))
         assertFalse(java.contains("getAllGuilds"))
         assertFalse(bedrock.contains("getAllGuilds"))
         assertFalse(java.contains(".subList("))
         assertFalse(bedrock.contains(".subList("))
+        assertFalse(java.contains("memberService.getMemberCount("))
+        assertFalse(bedrock.contains("memberService.getMemberCount("))
+    }
+
+    @Test
+    fun `async guild list results are discarded after navigation changes`() {
+        val java = File(
+            "src/main/kotlin/net/lumalyte/lg/interaction/menus/guild/GuildListMenu.kt"
+        ).readText()
+        val bedrockBase = File(
+            "src/main/kotlin/net/lumalyte/lg/interaction/menus/bedrock/BaseBedrockMenu.kt"
+        ).readText()
+
+        assertTrue(java.contains("menuNavigator.currentNavigationToken()"))
+        assertTrue(java.contains("menuNavigator.isNavigationCurrent(navigationToken)"))
+        assertTrue(java.contains("gui.setOnClose"))
+        assertTrue(java.contains("menuNavigator.invalidateCurrentNavigation()"))
+
+        assertTrue(bedrockBase.contains("openGeneration.incrementAndGet()"))
+        assertTrue(bedrockBase.contains("menuNavigator.currentNavigationToken()"))
+        assertTrue(bedrockBase.contains("openGeneration.get() != generation"))
+        assertTrue(bedrockBase.contains("isNavigationCurrent(navigationToken)"))
+        assertTrue(bedrockBase.contains("private val navigationToken: Long"))
     }
 
     @Test
@@ -65,9 +89,12 @@ class GuildListWiringTest {
             "src/main/kotlin/net/lumalyte/lg/interaction/menus/GuildBannerItemResolver.kt"
         ).readText()
 
-        assertTrue(java.contains("GuildBannerItemResolver.resolve(guild)"))
+        // Display copy of the stored banner: same resolver, pack item-model overrides stripped.
+        assertTrue(java.contains("GuildBannerItemResolver.resolveForDisplay(guild)"))
+        assertTrue(resolver.contains("fun resolveForDisplay(guild: Guild): ItemStack"))
+        assertTrue(resolver.contains("val item = resolve(guild)"))
         assertFalse(java.contains("ItemStack.of(Material.BOOK)"))
-        assertTrue(relation.contains("GuildBannerItemResolver.resolve(otherGuild)"))
+        assertTrue(relation.contains("GuildBannerItemResolver.resolveForDisplay(otherGuild)"))
         assertTrue(resolver.contains("Material.WHITE_BANNER"))
         assertTrue(resolver.contains("deserializeToItemStack()"))
     }

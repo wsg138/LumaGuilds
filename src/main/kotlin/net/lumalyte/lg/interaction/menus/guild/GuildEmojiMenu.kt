@@ -111,7 +111,13 @@ class GuildEmojiMenu(private val menuNavigator: MenuNavigator, private val playe
 
     private fun addCurrentEmojiDisplay(pane: StaticPane, x: Int, y: Int) {
         val currentEmojiText = currentEmoji?.let(nexoEmojiService::emojiToFontTag) ?: lang.raw("menu.guild_emoji.current.not_set")
-        val displayItem = ItemStack.of(Material.NAME_TAG)
+        val currentEmojiName = currentEmoji?.let(nexoEmojiService::extractEmojiName)
+        val displayItem = currentEmojiName?.let { emojiName ->
+            NexoItemProvider.getItemStackOrFallback("lg_emoji_choice_$emojiName") {
+                ItemStack.of(Material.NAME_TAG)
+            }
+        } ?: ItemStack.of(Material.NAME_TAG)
+        displayItem
             .name(lang.gui("menu.guild_emoji.current.name"))
             .lore(lang.gui("menu.guild_emoji.current.value", "emoji" to currentEmojiText))
             .lore(lang.gui("menu.common.blank"))
@@ -307,7 +313,7 @@ class GuildEmojiMenu(private val menuNavigator: MenuNavigator, private val playe
 
         val guiItem = GuiItem(cancelItem) {
             // Close menu without saving
-            menuNavigator.openMenu(menuFactory.createGuildControlPanelMenu(menuNavigator, player, guild))
+            menuNavigator.goBack()
         }
         pane.addItem(guiItem, x, y)
     }
@@ -318,7 +324,7 @@ class GuildEmojiMenu(private val menuNavigator: MenuNavigator, private val playe
             .lore(lang.gui("menu.guild_emoji.action.back.description"))
 
         val guiItem = GuiItem(backItem) {
-            menuNavigator.openMenu(menuFactory.createGuildControlPanelMenu(menuNavigator, player, guild))
+            menuNavigator.goBack()
         }
         pane.addItem(guiItem, x, y)
     }

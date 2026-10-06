@@ -1057,7 +1057,7 @@ class LumaGuilds : JavaPlugin() {
             val discordGateway = get().get<net.lumalyte.lg.application.services.DiscordGuildRoleGateway>()
             val discordRoleService = get().get<net.lumalyte.lg.application.services.GuildDiscordRoleService>()
             if (!discordGateway.isAvailable()) {
-                logger.warning("Discord guild roles are enabled, but DiscordSRV/main guild is unavailable")
+                logger.info("DiscordSRV is not ready yet; guild-role reconciliation will run when DiscordReadyEvent fires")
             } else {
                 discordRoleService
                     .reconcileAll()
@@ -1092,6 +1092,10 @@ class LumaGuilds : JavaPlugin() {
                 }
             }, 20L * 60L, 20L * 60L * 5L)
         }
+
+        // Public Discord guild profiles are independent of Discord role syncing:
+        // every LumaGuilds guild is browseable, even when guild_roles is disabled.
+        get().get<net.lumalyte.lg.application.services.DiscordGuildProfileSubscription>().subscribe()
 
         // Clean up RoseChat channels when guild status changes.
         // LumaGuilds can enable BEFORE RoseChat despite `depend: [RoseChat]`
@@ -1152,6 +1156,16 @@ class LumaGuilds : JavaPlugin() {
 
         // Register NexoItemProvider listener — fires on NexoItemsLoadedEvent
         net.lumalyte.lg.utils.NexoItemProvider.register(this)
+
+        // Vanilla icons for Bedrock players and Vanilla-style guilds; plain titles for Bedrock
+        runCatching {
+            net.lumalyte.lg.infrastructure.services.MenuIconAdapter(
+                this,
+                get().get<net.lumalyte.lg.application.services.PlatformDetectionService>(),
+                get().get<net.lumalyte.lg.application.services.GuildService>(),
+                bedrockConfig = { get().get<net.lumalyte.lg.application.services.ConfigService>().loadConfig().bedrock },
+            ).register()
+        }.onFailure { logger.warning("Menu icon adapter not started: ${it.message}") }
     }
 
     /**
@@ -1402,6 +1416,11 @@ class LumaGuilds : JavaPlugin() {
             get().getOrNull<net.lumalyte.lg.application.services.DiscordAccountLinkSubscription>()?.unsubscribe()
         } catch (e: Exception) {
             logger.warning("Failed to unsubscribe DiscordSRV account-link listener: ${e.message}")
+        }
+        try {
+            get().getOrNull<net.lumalyte.lg.application.services.DiscordGuildProfileSubscription>()?.unsubscribe()
+        } catch (e: Exception) {
+            logger.warning("Failed to unregister DiscordSRV guild profile commands: ${e.message}")
         }
         try {
             get().getOrNull<net.lumalyte.lg.infrastructure.services.WeeklyQuestCoordinator>()?.stop()

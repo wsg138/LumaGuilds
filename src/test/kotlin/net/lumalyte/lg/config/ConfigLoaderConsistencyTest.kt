@@ -48,6 +48,20 @@ class ConfigLoaderConsistencyTest {
     }
 
     @Test
+    fun `bedrock java-menu fallbacks are opt-in and loaded`() {
+        val defaults = load(YamlConfiguration()).bedrock
+        assertFalse(defaults.javaMenuVanillaIcons)
+        assertFalse(defaults.javaMenuPlainTitles)
+        val cfg = YamlConfiguration().apply {
+            set("bedrock.java_menu_vanilla_icons", true)
+            set("bedrock.java_menu_plain_titles", true)
+        }
+        val bedrock = load(cfg).bedrock
+        assertTrue(bedrock.javaMenuVanillaIcons)
+        assertTrue(bedrock.javaMenuPlainTitles)
+    }
+
+    @Test
     fun `brewing xp is loaded`() {
         val cfg = YamlConfiguration().apply { set("progression.brewing_xp", 42) }
         assertEquals(42, load(cfg).progression.brewingXp)
@@ -91,10 +105,11 @@ class ConfigLoaderConsistencyTest {
     }
 
     @Test
-    fun `discord guild roles default enabled from guild creation`() {
+    fun `discord guild roles default to level 50`() {
         val discord = load(YamlConfiguration()).discordGuildRoles
 
         assertTrue(discord.enabled)
+        assertEquals(50, discord.minimumLevel)
         assertEquals("Guild • <guild>", discord.roleNameFormat)
     }
 
@@ -102,13 +117,25 @@ class ConfigLoaderConsistencyTest {
     fun `discord guild role settings are loaded when explicitly configured`() {
         val cfg = YamlConfiguration().apply {
             set("discord.guild_roles.enabled", false)
+            set("discord.guild_roles.minimum_level", 25)
             set("discord.guild_roles.role_name_format", "[Guild] <guild>")
         }
 
         val discord = load(cfg).discordGuildRoles
 
         assertFalse(discord.enabled)
+        assertEquals(25, discord.minimumLevel)
         assertEquals("[Guild] <guild>", discord.roleNameFormat)
+    }
+
+    @Test
+    fun `discord guild role minimum must be within progression levels`() {
+        for (level in listOf(0, 101)) {
+            val cfg = YamlConfiguration().apply { set("discord.guild_roles.minimum_level", level) }
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException::class.java) {
+                load(cfg)
+            }
+        }
     }
 
     @Test
