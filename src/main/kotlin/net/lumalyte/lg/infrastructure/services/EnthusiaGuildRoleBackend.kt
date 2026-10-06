@@ -30,7 +30,8 @@ class EnthusiaGuildRoleBackend(
 ) : GuildDiscordRoleBackend {
     override val provider: GuildDiscordRoleProvider = GuildDiscordRoleProvider.ENTHUSIA
 
-    override fun isAvailable(): Boolean = client()?.availability() != DiscordPlatformAvailability.UNAVAILABLE
+    override fun isAvailable(): Boolean =
+        client()?.availability()?.let { it != DiscordPlatformAvailability.UNAVAILABLE } ?: false
 
     override fun reconcile(
         desiredState: GuildDiscordRoleDesiredState,
