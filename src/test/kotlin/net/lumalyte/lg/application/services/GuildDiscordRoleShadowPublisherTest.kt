@@ -81,6 +81,7 @@ class GuildDiscordRoleShadowPublisherTest {
         val guilds = mockk<GuildService>()
         val memberService = mockk<MemberService>()
         val backend = CapturingBackend()
+        val repository = mockk<GuildDiscordRoleRepository>()
         every { config.loadConfig() } returns MainConfig(
             discordGuildRoles = DiscordGuildRolesConfig(
                 enabled = true,
@@ -88,7 +89,7 @@ class GuildDiscordRoleShadowPublisherTest {
             ),
         )
 
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService) { backend }
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository) { backend }
         val guildId = UUID.randomUUID()
         val summary = publisher.deleteGuild(guildId).join()
 
