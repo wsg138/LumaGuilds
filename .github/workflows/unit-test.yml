@@ -19,6 +19,7 @@ jobs:
       ROSECHAT_UPSTREAM_REF: 179483128fa2020f3ad8b0e4192ada3d0a251c49 # official Rosewood 26.2 support commit
       PLAYTIME_API_REF: 2a5b57d       # wsg138/PlayTimePlugin commit the API jar is built from
       COMBATLOGX_API_REF: 4812e85af1264ebb27da481b9d9cbf8de0956e53 # last complete 11.6 API source tree
+      STAFF_API_REF: bd894c35a452b766736657f3803001a726aa5e06 # exact EnthusiaStaff managed-role API source
 
     permissions:
       contents: read
@@ -33,6 +34,27 @@ jobs:
       with:
         java-version: '25'
         distribution: 'temurin'
+
+    - name: Cache EnthusiaStaff Discord platform API jar
+      id: staff-api-cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: libs/EnthusiaStaff-discord-platform-api.jar
+        key: enthusia-staff-discord-platform-api-${{ env.STAFF_API_REF }}
+
+    - name: Build EnthusiaStaff Discord platform API jar
+      if: steps.staff-api-cache.outputs.cache-hit != 'true'
+      run: |
+        git clone https://github.com/wsg138/EnthusiaStaff.git "$RUNNER_TEMP/enthusia-staff"
+        cd "$RUNNER_TEMP/enthusia-staff"
+        git checkout "$STAFF_API_REF"
+        chmod +x gradlew
+        ./gradlew :discord-platform-api:jar --no-daemon --no-configuration-cache
+        mkdir -p "$GITHUB_WORKSPACE/libs"
+        STAFF_API_JAR=$(find discord-platform-api/build/libs -maxdepth 1 -name 'discord-platform-api-*.jar' \
+          ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -1)
+        test -n "$STAFF_API_JAR"
+        cp "$STAFF_API_JAR" "$GITHUB_WORKSPACE/libs/EnthusiaStaff-discord-platform-api.jar"
 
     # Compile against the canonical official Rosewood 26.2 source.
     - name: Cache RoseChat jar
