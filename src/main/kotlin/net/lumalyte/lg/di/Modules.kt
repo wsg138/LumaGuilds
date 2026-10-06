@@ -559,6 +559,20 @@ fun socialModule() = module {
     single<net.lumalyte.lg.infrastructure.listeners.GuildDiscordRoleListener> {
         net.lumalyte.lg.infrastructure.listeners.GuildDiscordRoleListener(get())
     }
+    single {
+        net.lumalyte.lg.application.services.GuildDiscordRoleShadowPublisher(
+            get(),
+            get(),
+            get(),
+            net.lumalyte.lg.infrastructure.services.EnthusiaGuildRoleBackendFactory::current,
+        )
+    }
+    single {
+        net.lumalyte.lg.infrastructure.listeners.GuildDiscordRoleShadowRuntime(
+            get<LumaGuilds>(),
+            get(),
+        )
+    }
     single<net.lumalyte.lg.application.services.DiscordAccountLinkSubscription> {
         if (org.bukkit.Bukkit.getPluginManager().getPlugin("DiscordSRV") != null) {
             net.lumalyte.lg.infrastructure.services.DiscordSrvAccountLinkSubscription(get())
