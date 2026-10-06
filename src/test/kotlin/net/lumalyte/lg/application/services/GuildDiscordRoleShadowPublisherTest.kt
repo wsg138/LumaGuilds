@@ -58,6 +58,45 @@ class GuildDiscordRoleShadowPublisherTest {
     }
 
     @Test
+    fun `reconcile all isolates a failing guild and continues publishing others`() {
+        val failingGuildId = UUID.randomUUID()
+        val healthyGuildId = UUID.randomUUID()
+        val failingGuild = Guild(failingGuildId, "Broken", createdAt = Instant.EPOCH)
+        val healthyGuild = Guild(healthyGuildId, "Healthy", createdAt = Instant.EPOCH)
+        val healthyPlayer = UUID.randomUUID()
+
+        val config = mockk<ConfigService>()
+        val guilds = mockk<GuildService>()
+        val memberService = mockk<MemberService>()
+        val backend = CapturingBackend()
+        val repository = mockk<GuildDiscordRoleRepository>()
+
+        every { config.loadConfig() } returns MainConfig(
+            discordGuildRoles = DiscordGuildRolesConfig(
+                enabled = true,
+                roleNameFormat = "Guild • <guild>",
+                enthusiaShadowEnabled = true,
+            ),
+        )
+        every { guilds.getAllGuilds() } returns listOf(failingGuild, healthyGuild)
+        every { guilds.getGuild(failingGuildId) } returns failingGuild
+        every { guilds.getGuild(healthyGuildId) } returns healthyGuild
+        every { memberService.getGuildMembers(failingGuildId) } throws IllegalStateException("broken snapshot")
+        every { memberService.getGuildMembers(healthyGuildId) } returns setOf(
+            Member(healthyPlayer, healthyGuildId, UUID.randomUUID(), Instant.EPOCH),
+        )
+        every { repository.get(healthyGuildId) } returns null
+
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository) { backend }
+        val summary = publisher.reconcileAll().join()
+
+        assertEquals(1, summary.claimsPublished)
+        assertEquals(1, summary.failures)
+        assertEquals(healthyGuildId, backend.lastDesired?.guildId)
+        assertEquals(setOf(healthyPlayer), backend.lastDesired?.desiredPlayerIds)
+    }
+
+    @Test
     fun `shadow publication is independently disabled by default`() {
         val config = mockk<ConfigService>()
         val guilds = mockk<GuildService>()
