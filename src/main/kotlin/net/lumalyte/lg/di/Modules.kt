@@ -564,6 +564,7 @@ fun socialModule() = module {
             get(),
             get(),
             get(),
+            get(),
             net.lumalyte.lg.infrastructure.services.EnthusiaGuildRoleBackendFactory::current,
         )
     }
