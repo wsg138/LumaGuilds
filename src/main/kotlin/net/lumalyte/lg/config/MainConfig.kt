@@ -64,10 +64,12 @@ data class GuildListConfig(
 
 data class DiscordGuildRolesConfig(
     var enabled: Boolean = true,
+    var minimumLevel: Int = 50,
     var roleNameFormat: String = "Guild • <guild>",
     var enthusiaShadowEnabled: Boolean = false,
 ) {
     init {
+        require(minimumLevel in 1..100) { "discord.guild_roles.minimum_level must be between 1 and 100" }
         require(roleNameFormat.isNotBlank()) { "discord.guild_roles.role_name_format cannot be blank" }
         require("<guild>" in roleNameFormat) {
             "discord.guild_roles.role_name_format must contain <guild>"
@@ -567,6 +569,11 @@ data class BedrockConfig(
     var fallbackToJavaMenus: Boolean = true, // If Bedrock menus fail, fallback to Java
     var fallbackOnFloodgateUnavailable: Boolean = true,
     var fallbackOnCumulusUnavailable: Boolean = true,
+
+    // Java chest menus seen by Bedrock players (opt-in: Geyser custom-item mappings may already
+    // draw the lg_ icons and menu art for Bedrock, and these would override them)
+    var javaMenuVanillaIcons: Boolean = false, // send vanilla items instead of Nexo menu icons
+    var javaMenuPlainTitles: Boolean = false, // drop the font-glyph background from themed titles
 
     // Performance tuning
     var formCacheEnabled: Boolean = true,
