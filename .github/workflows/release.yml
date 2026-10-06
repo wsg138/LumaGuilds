@@ -19,7 +19,9 @@ jobs:
       contents: write
     env:
       ROSECHAT_UPSTREAM_REF: 179483128fa2020f3ad8b0e4192ada3d0a251c49
+      PLAYTIME_API_REF: 2a5b57d
       COMBATLOGX_API_REF: 4812e85af1264ebb27da481b9d9cbf8de0956e53
+      STAFF_API_REF: bd894c35a452b766736657f3803001a726aa5e06
 
     steps:
       - uses: actions/checkout@v4
@@ -88,6 +90,50 @@ jobs:
         with:
           distribution: temurin
           java-version: 25
+
+      - name: Cache EnthusiaStaff Discord platform API jar
+        id: staff-api-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: libs/EnthusiaStaff-discord-platform-api.jar
+          key: enthusia-staff-discord-platform-api-${{ env.STAFF_API_REF }}
+
+      - name: Build EnthusiaStaff Discord platform API jar
+        if: steps.staff-api-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/wsg138/EnthusiaStaff.git "$RUNNER_TEMP/enthusia-staff"
+          cd "$RUNNER_TEMP/enthusia-staff"
+          git checkout "$STAFF_API_REF"
+          chmod +x gradlew
+          ./gradlew :discord-platform-api:jar --no-daemon --no-configuration-cache
+          mkdir -p "$GITHUB_WORKSPACE/libs"
+          STAFF_API_JAR=$(find discord-platform-api/build/libs -maxdepth 1 -name 'discord-platform-api-*.jar' \
+            ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -1)
+          test -n "$STAFF_API_JAR"
+          cp "$STAFF_API_JAR" "$GITHUB_WORKSPACE/libs/EnthusiaStaff-discord-platform-api.jar"
+
+      - name: Cache EnthusiaPlaytime API jar
+        id: playtime-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: libs/EnthusiaPlaytime-api.jar
+          key: playtime-api-${{ env.PLAYTIME_API_REF }}
+
+      - name: Build EnthusiaPlaytime API jar
+        if: steps.playtime-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/wsg138/PlayTimePlugin.git "$RUNNER_TEMP/playtime"
+          cd "$RUNNER_TEMP/playtime"
+          git checkout "$PLAYTIME_API_REF"
+          mkdir -p "$GITHUB_WORKSPACE/libs" "$RUNNER_TEMP/playtime-classes"
+          javac -d "$RUNNER_TEMP/playtime-classes" \
+            src/main/java/org/enthusia/playtime/api/PlaytimeService.java \
+            src/main/java/org/enthusia/playtime/api/PlaytimeRange.java \
+            src/main/java/org/enthusia/playtime/api/PlaytimeMetric.java \
+            src/main/java/org/enthusia/playtime/activity/ActivityState.java \
+            src/main/java/org/enthusia/playtime/data/model/PlaytimeSnapshot.java \
+            src/main/java/org/enthusia/playtime/data/model/RangeTotals.java
+          jar cf "$GITHUB_WORKSPACE/libs/EnthusiaPlaytime-api.jar" -C "$RUNNER_TEMP/playtime-classes" .
 
       - name: Build official RoseChat 26.2 dependency
         if: steps.rosechat-cache.outputs.cache-hit != 'true'
