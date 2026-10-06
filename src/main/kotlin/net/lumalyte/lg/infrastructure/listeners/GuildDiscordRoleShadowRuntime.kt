@@ -9,6 +9,7 @@ import net.lumalyte.lg.api.events.GuildRenamedEvent
 import net.lumalyte.lg.application.services.GuildDiscordRoleShadowPublisher
 import net.lumalyte.lg.application.services.GuildDiscordRoleShadowSummary
 import org.bukkit.event.EventHandler
+import org.bukkit.event.HandlerList
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.scheduler.BukkitTask
@@ -83,6 +84,7 @@ class GuildDiscordRoleShadowRuntime(
     override fun close() {
         periodicTask?.cancel()
         periodicTask = null
+        HandlerList.unregisterAll(this)
         started.set(false)
     }
 
