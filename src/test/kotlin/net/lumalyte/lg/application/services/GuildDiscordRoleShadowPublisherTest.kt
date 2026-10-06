@@ -2,9 +2,11 @@ package net.lumalyte.lg.application.services
 
 import io.mockk.every
 import io.mockk.mockk
+import net.lumalyte.lg.application.persistence.GuildDiscordRoleRepository
 import net.lumalyte.lg.config.DiscordGuildRolesConfig
 import net.lumalyte.lg.config.MainConfig
 import net.lumalyte.lg.domain.entities.Guild
+import net.lumalyte.lg.domain.entities.GuildDiscordRoleLink
 import net.lumalyte.lg.domain.entities.Member
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -28,6 +30,7 @@ class GuildDiscordRoleShadowPublisherTest {
         val guilds = mockk<GuildService>()
         val memberService = mockk<MemberService>()
         val backend = CapturingBackend()
+        val repository = mockk<GuildDiscordRoleRepository>()
         every { config.loadConfig() } returns MainConfig(
             discordGuildRoles = DiscordGuildRolesConfig(
                 enabled = true,
@@ -37,14 +40,21 @@ class GuildDiscordRoleShadowPublisherTest {
         )
         every { guilds.getGuild(guildId) } returns guild
         every { memberService.getGuildMembers(guildId) } returns members
+        every { repository.get(guildId) } returns GuildDiscordRoleLink(
+            guildId,
+            "1552390213500928122",
+            Instant.EPOCH,
+        )
 
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService) { backend }
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository) { backend }
         val summary = publisher.reconcileGuild(guildId).join()
 
         assertEquals(1, summary.claimsPublished)
         assertEquals(0, summary.failures)
         assertEquals("Guild • Badgers", backend.lastDesired?.roleName)
         assertEquals(setOf(first, second), backend.lastDesired?.desiredPlayerIds)
+        assertEquals(GuildDiscordRoleProvider.DISCORDSRV, backend.lastCurrentOwnership?.provider)
+        assertEquals("1552390213500928122", backend.lastCurrentOwnership?.providerReference)
     }
 
     @Test
@@ -56,7 +66,8 @@ class GuildDiscordRoleShadowPublisherTest {
             discordGuildRoles = DiscordGuildRolesConfig(enabled = true),
         )
 
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService) {
+        val repository = mockk<GuildDiscordRoleRepository>()
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository) {
             error("backend must not be resolved while shadow publication is disabled")
         }
 
@@ -90,6 +101,7 @@ class GuildDiscordRoleShadowPublisherTest {
     private class CapturingBackend : GuildDiscordRoleBackend {
         override val provider = GuildDiscordRoleProvider.ENTHUSIA
         var lastDesired: GuildDiscordRoleDesiredState? = null
+        var lastCurrentOwnership: GuildDiscordRoleOwnership? = null
         var lastDeleteGuild: UUID? = null
         var lastDeleteOwnership: GuildDiscordRoleOwnership? = null
 
@@ -100,6 +112,7 @@ class GuildDiscordRoleShadowPublisherTest {
             currentOwnership: GuildDiscordRoleOwnership?,
         ): CompletableFuture<GuildDiscordRoleReconcileResult> {
             lastDesired = desiredState
+            lastCurrentOwnership = currentOwnership
             return CompletableFuture.completedFuture(
                 GuildDiscordRoleReconcileResult(
                     GuildDiscordRoleOwnership(provider, "guild:${desiredState.guildId}"),
