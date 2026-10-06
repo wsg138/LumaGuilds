@@ -32,13 +32,17 @@ class EnthusiaGuildRoleBackendTest {
 
         val result = backend.reconcile(
             GuildDiscordRoleDesiredState(guildId, "Guild • Test", setOf(first, second)),
-            null,
+            GuildDiscordRoleOwnership(
+                GuildDiscordRoleProvider.DISCORDSRV,
+                "1552390213500928122",
+            ),
         ).join()
 
         val claim = requireNotNull(client.lastClaim)
         assertEquals("luma-guilds", claim.key().namespace().value())
         assertEquals("guild:$guildId", claim.key().localKey())
         assertEquals("Guild • Test", claim.displayName())
+        assertEquals(Optional.of("1552390213500928122"), claim.existingDiscordRoleId())
         assertEquals(setOf(first, second), claim.desiredMinecraftAccounts())
         assertEquals(GuildDiscordRoleProvider.ENTHUSIA, result.ownership.provider)
         assertFalse(result.created)
