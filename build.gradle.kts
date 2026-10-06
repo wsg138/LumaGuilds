@@ -63,8 +63,9 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.129-stable")
     compileOnly("com.github.retrooper:packetevents-spigot:2.11.2")
     compileOnly("com.discordsrv:discordsrv:1.28.0")
-    compileOnly("com.github.wsg138.EnthusiaStaff:discord-platform-api:4e208e38d5bb96b5a7065b6405781904c54e4949")
-    testImplementation("com.github.wsg138.EnthusiaStaff:discord-platform-api:4e208e38d5bb96b5a7065b6405781904c54e4949")
+    // Built from a pinned EnthusiaStaff source commit by CI; never shaded into LumaGuilds.
+    compileOnly(files("libs/EnthusiaStaff-discord-platform-api.jar"))
+    testImplementation(files("libs/EnthusiaStaff-discord-platform-api.jar"))
     shadow("org.jetbrains.kotlin:kotlin-stdlib")
 
     implementation("org.slf4j:slf4j-nop:2.0.13")
