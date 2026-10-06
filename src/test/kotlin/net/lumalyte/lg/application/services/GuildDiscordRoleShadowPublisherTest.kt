@@ -78,7 +78,7 @@ class GuildDiscordRoleShadowPublisherTest {
                 enthusiaShadowEnabled = true,
             ),
         )
-        every { guilds.getAllGuilds() } returns listOf(failingGuild, healthyGuild)
+        every { guilds.getAllGuilds() } returns setOf(failingGuild, healthyGuild)
         every { guilds.getGuild(failingGuildId) } returns failingGuild
         every { guilds.getGuild(healthyGuildId) } returns healthyGuild
         every { memberService.getGuildMembers(failingGuildId) } throws IllegalStateException("broken snapshot")
