@@ -15,6 +15,7 @@ import net.lumalyte.lg.application.services.GuildDiscordRoleOwnership
 import net.lumalyte.lg.application.services.GuildDiscordRoleProvider
 import net.lumalyte.lg.application.services.GuildDiscordRoleReconcileResult
 import org.bukkit.Bukkit
+import java.util.Optional
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -37,13 +38,15 @@ class EnthusiaGuildRoleBackend(
         desiredState: GuildDiscordRoleDesiredState,
         currentOwnership: GuildDiscordRoleOwnership?,
     ): CompletableFuture<GuildDiscordRoleReconcileResult> {
-        if (currentOwnership != null && currentOwnership.provider != provider) {
-            return failed("Managed-role ownership belongs to another provider")
-        }
         val client = client() ?: return failed("Enthusia managed-role platform is unavailable")
         val key = key(desiredState.guildId.toString())
         return client.reconcile(
-            ManagedRoleClaim(key, desiredState.roleName, desiredState.desiredPlayerIds),
+            ManagedRoleClaim(
+                key,
+                desiredState.roleName,
+                existingDiscordRoleId(currentOwnership),
+                desiredState.desiredPlayerIds,
+            ),
         ).toCompletableFuture().thenCompose { result ->
             when (result.status()) {
                 ManagedRoleReconcileStatus.APPLIED,
@@ -83,6 +86,15 @@ class EnthusiaGuildRoleBackend(
             }
         }
     }
+
+    private fun existingDiscordRoleId(
+        currentOwnership: GuildDiscordRoleOwnership?,
+    ): Optional<String> =
+        if (currentOwnership?.provider == GuildDiscordRoleProvider.DISCORDSRV) {
+            Optional.ofNullable(currentOwnership.providerReference)
+        } else {
+            Optional.empty()
+        }
 
     private fun client(): ManagedRoleClient? {
         val platform = platformProvider() ?: return null
