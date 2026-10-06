@@ -1,5 +1,6 @@
 package net.lumalyte.lg.application.services
 
+import net.lumalyte.lg.application.persistence.GuildDiscordRoleRepository
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
@@ -25,6 +26,7 @@ class GuildDiscordRoleShadowPublisher(
     private val configService: ConfigService,
     private val guildService: GuildService,
     private val memberService: MemberService,
+    private val repository: GuildDiscordRoleRepository,
     private val backendProvider: () -> GuildDiscordRoleBackend?,
 ) {
     fun enabled(): Boolean {
@@ -55,7 +57,13 @@ class GuildDiscordRoleShadowPublisher(
             desiredPlayerIds = memberService.getGuildMembers(guild.id)
                 .mapTo(linkedSetOf()) { member -> member.playerId },
         )
-        return backend.reconcile(desired, null).handle { _, error ->
+        val legacyOwnership = repository.get(guild.id)?.let { link ->
+            GuildDiscordRoleOwnership(
+                provider = GuildDiscordRoleProvider.DISCORDSRV,
+                providerReference = link.discordRoleId,
+            )
+        }
+        return backend.reconcile(desired, legacyOwnership).handle { _, error ->
             if (error == null) {
                 GuildDiscordRoleShadowSummary(claimsPublished = 1)
             } else {
