@@ -96,13 +96,30 @@ The StaffBot managed-role SHADOW runtime must also be enabled separately. Discor
 
 ### Acceptance gate
 
-Do not switch writers from this checkpoint alone. Require repeated complete StaffBot summaries with no unexplained drift:
+Do not switch writers from this checkpoint alone. The StaffBot's post-#603/#604 migration
+diagnostics distinguish actual populated parity evidence from empty, partial, name-only,
+and conflicting-ownership snapshots. Require repeated complete **nonempty** read-only scans:
 
 ```text
-managed_role_shadow_summary complete=true ... drift=0 ... invalid_claims=0
+managed_role_shadow_summary complete=true ... invalid_claims=0 ... drift=0 ...
+    sample_gate=ZERO_DRIFT_SAMPLE luma_claims=<positive> playtime_claims=<expected>
+    unbound_role_claims=0 conflicting_role_ids=0
 ```
 
-Also investigate any `managed_role_shadow_drift`, `managed_role_shadow_incomplete`, or `managed_role_shadow_cycle_failed` records before cutover. A zero-drift SHADOW pass is migration evidence only; it does not authorize DiscordSRV removal or generic managed-role enforcement.
+Check `luma_claims` against the expected number of guild-role claims and deletion tombstones,
+not merely for a positive count. Check `playtime_claims` against the separately enabled PlayTime
+publisher's twelve-tier snapshot expectations; a zero can only be accepted when PlayTime
+is intentionally out of scope and explicitly documented as such.
+
+Do not accept `NO_CLAIMS`, `SNAPSHOT_INCOMPLETE`, `ROLE_DRIFT`,
+`ROLE_ID_UNBOUND`, or `ROLE_OWNERSHIP_CONFLICT` as parity evidence.
+Investigate `managed_role_shadow_drift`, `managed_role_shadow_incomplete`,
+`managed_role_shadow_cycle_failed`, or publisher failure counts.
+
+Legacy exact Discord role IDs must match the currently owned roles. Similar display names
+are not identity proof. Preserve account-link changes, multi-Minecraft-account union,
+guild disband/delete tombstones, and ordinary player churn across repeated comparison
+windows. A zero-drift sample is **not** approval to enable role writes or remove DiscordSRV.
 
 ## Migration sequence
 
