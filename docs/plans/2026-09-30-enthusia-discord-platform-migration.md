@@ -74,6 +74,12 @@ Implemented on the managed-role migration branch after EnthusiaStaff #342 merged
 - One guild's synchronous publication failure is isolated and counted instead of aborting the entire full pass.
 - The lazily loaded Enthusia backend is invalidated when EnthusiaStaff is disabled/reloaded, avoiding stale classloader/provider reuse.
 - Closing the shadow runtime unregisters Bukkit event handlers before the same instance can be started again.
+- All shadow publisher entry points contain synchronous backend/configuration, repository and
+  guild snapshot failures as counted publication failures. These failures never bubble out through
+  ordinary guild join/remove/rename/disband event handling or recurring scans; DiscordSRV remains
+  the authoritative role writer throughout this migration stage.
+- Shadow runtime warnings avoid echoing arbitrary provider exception messages and guild UUIDs.
+  A partial or failed publication cannot be treated as complete role parity evidence.
 - SQLite rehearsal snapshots use SQLite itself so committed WAL state is included in migration verification.
 
 ### Enablement

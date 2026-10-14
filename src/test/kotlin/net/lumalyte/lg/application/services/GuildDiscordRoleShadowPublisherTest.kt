@@ -138,6 +138,55 @@ class GuildDiscordRoleShadowPublisherTest {
         assertEquals("guild:$guildId", backend.lastDeleteOwnership?.providerReference)
     }
 
+    @Test
+    fun `single guild shadow probe returns failure when membership read throws`() {
+        val guildId = UUID.randomUUID()
+        val config = mockk<ConfigService>()
+        val guilds = mockk<GuildService>()
+        val members = mockk<MemberService>()
+        val repository = mockk<GuildDiscordRoleRepository>()
+        every { config.loadConfig() } returns MainConfig(
+            discordGuildRoles = DiscordGuildRolesConfig(enabled = true, enthusiaShadowEnabled = true),
+        )
+        every { guilds.getGuild(guildId) } returns Guild(guildId, "Broken", createdAt = Instant.EPOCH)
+        every { members.getGuildMembers(guildId) } throws IllegalStateException("unavailable member snapshot")
+        val backend = CapturingBackend()
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository) { backend }
+        assertEquals(1, publisher.reconcileGuild(guildId).join().failures)
+        assertEquals(null, backend.lastDesired)
+    }
+
+    @Test
+    fun `periodic shadow probe returns failure when guild listing throws`() {
+        val config = mockk<ConfigService>()
+        val guilds = mockk<GuildService>()
+        val members = mockk<MemberService>()
+        val repository = mockk<GuildDiscordRoleRepository>()
+        every { config.loadConfig() } returns MainConfig(
+            discordGuildRoles = DiscordGuildRolesConfig(enabled = true, enthusiaShadowEnabled = true),
+        )
+        every { guilds.getAllGuilds() } throws IllegalStateException("guild DB is unavailable")
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository) {
+            error("shadow backend must not initialize when the guild listing fails")
+        }
+        assertEquals(1, publisher.reconcileAll().join().failures)
+    }
+
+    @Test
+    fun `disband shadow probe returns failure when its backend crashes synchronously`() {
+        val config = mockk<ConfigService>()
+        val guilds = mockk<GuildService>()
+        val members = mockk<MemberService>()
+        val repository = mockk<GuildDiscordRoleRepository>()
+        every { config.loadConfig() } returns MainConfig(
+            discordGuildRoles = DiscordGuildRolesConfig(enabled = true, enthusiaShadowEnabled = true),
+        )
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository) {
+            error("shadow backend not loaded")
+        }
+        assertEquals(1, publisher.deleteGuild(UUID.randomUUID()).join().failures)
+    }
+
     private class CapturingBackend : GuildDiscordRoleBackend {
         override val provider = GuildDiscordRoleProvider.ENTHUSIA
         var lastDesired: GuildDiscordRoleDesiredState? = null

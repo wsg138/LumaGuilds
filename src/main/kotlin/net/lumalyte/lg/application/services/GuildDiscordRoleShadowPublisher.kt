@@ -34,8 +34,8 @@ class GuildDiscordRoleShadowPublisher(
         return config.enabled && config.enthusiaShadowEnabled
     }
 
-    fun reconcileAll(): CompletableFuture<GuildDiscordRoleShadowSummary> {
-        if (!enabled()) return completed(GuildDiscordRoleShadowSummary())
+    fun reconcileAll(): CompletableFuture<GuildDiscordRoleShadowSummary> = safePublish {
+        if (!enabled()) return@safePublish completed(GuildDiscordRoleShadowSummary())
         val work = guildService.getAllGuilds().map { guild ->
             try {
                 reconcileGuild(guild.id)
@@ -43,17 +43,17 @@ class GuildDiscordRoleShadowPublisher(
                 completed(GuildDiscordRoleShadowSummary(failures = 1))
             }
         }
-        return combine(work)
+        combine(work)
     }
 
-    fun reconcileGuild(guildId: UUID): CompletableFuture<GuildDiscordRoleShadowSummary> {
-        if (!enabled()) return completed(GuildDiscordRoleShadowSummary())
+    fun reconcileGuild(guildId: UUID): CompletableFuture<GuildDiscordRoleShadowSummary> = safePublish {
+        if (!enabled()) return@safePublish completed(GuildDiscordRoleShadowSummary())
         val guild = guildService.getGuild(guildId)
-            ?: return completed(GuildDiscordRoleShadowSummary())
+            ?: return@safePublish completed(GuildDiscordRoleShadowSummary())
         val backend = backendProvider()
-            ?: return completed(GuildDiscordRoleShadowSummary(failures = 1))
+            ?: return@safePublish completed(GuildDiscordRoleShadowSummary(failures = 1))
         if (!backend.isAvailable()) {
-            return completed(GuildDiscordRoleShadowSummary(failures = 1))
+            return@safePublish completed(GuildDiscordRoleShadowSummary(failures = 1))
         }
 
         val config = configService.loadConfig().discordGuildRoles
@@ -69,7 +69,7 @@ class GuildDiscordRoleShadowPublisher(
                 providerReference = link.discordRoleId,
             )
         }
-        return backend.reconcile(desired, legacyOwnership).handle { _, error ->
+        backend.reconcile(desired, legacyOwnership).handle { _, error ->
             if (error == null) {
                 GuildDiscordRoleShadowSummary(claimsPublished = 1)
             } else {
@@ -78,19 +78,19 @@ class GuildDiscordRoleShadowPublisher(
         }
     }
 
-    fun deleteGuild(guildId: UUID): CompletableFuture<GuildDiscordRoleShadowSummary> {
-        if (!enabled()) return completed(GuildDiscordRoleShadowSummary())
+    fun deleteGuild(guildId: UUID): CompletableFuture<GuildDiscordRoleShadowSummary> = safePublish {
+        if (!enabled()) return@safePublish completed(GuildDiscordRoleShadowSummary())
         val backend = backendProvider()
-            ?: return completed(GuildDiscordRoleShadowSummary(failures = 1))
+            ?: return@safePublish completed(GuildDiscordRoleShadowSummary(failures = 1))
         if (!backend.isAvailable()) {
-            return completed(GuildDiscordRoleShadowSummary(failures = 1))
+            return@safePublish completed(GuildDiscordRoleShadowSummary(failures = 1))
         }
 
         val ownership = GuildDiscordRoleOwnership(
             provider = GuildDiscordRoleProvider.ENTHUSIA,
             providerReference = "guild:$guildId",
         )
-        return backend.delete(guildId, ownership).handle { result, error ->
+        backend.delete(guildId, ownership).handle { result, error ->
             if (error == null && result != GuildDiscordRoleDeleteResult.REJECTED
                 && result != GuildDiscordRoleDeleteResult.UNAVAILABLE
             ) {
@@ -100,6 +100,19 @@ class GuildDiscordRoleShadowPublisher(
             }
         }
     }
+
+    /**
+     * A read-only Discord role migration probe must never fail an ordinary guild event
+     * or leave a periodic scheduler with an uncaught snapshot/provider exception.
+     */
+    private fun safePublish(
+        operation: () -> CompletableFuture<GuildDiscordRoleShadowSummary>,
+    ): CompletableFuture<GuildDiscordRoleShadowSummary> =
+        try {
+            operation()
+        } catch (_: RuntimeException) {
+            completed(GuildDiscordRoleShadowSummary(failures = 1))
+        }
 
     internal fun renderRoleName(format: String, guildName: String): String =
         format.replace("<guild>", guildName)
