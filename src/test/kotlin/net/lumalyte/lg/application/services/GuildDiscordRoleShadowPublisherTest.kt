@@ -2,6 +2,8 @@ package net.lumalyte.lg.application.services
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import net.lumalyte.lg.application.persistence.ProgressionRepository
 import net.lumalyte.lg.application.persistence.GuildDiscordRoleRepository
 import net.lumalyte.lg.config.DiscordGuildRolesConfig
 import net.lumalyte.lg.config.MainConfig
@@ -15,6 +17,10 @@ import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 class GuildDiscordRoleShadowPublisherTest {
+    private val progression = mockk<ProgressionRepository> {
+        every { getGuildProgression(any()) } returns null
+    }
+
     @Test
     fun `reconcile publishes the complete current guild membership snapshot`() {
         val guildId = UUID.randomUUID()
@@ -46,7 +52,7 @@ class GuildDiscordRoleShadowPublisherTest {
             Instant.EPOCH,
         )
 
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository) { backend }
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository, progression) { backend }
         val summary = publisher.reconcileGuild(guildId).join()
 
         assertEquals(1, summary.claimsPublished)
@@ -61,8 +67,8 @@ class GuildDiscordRoleShadowPublisherTest {
     fun `reconcile all isolates a failing guild and continues publishing others`() {
         val failingGuildId = UUID.randomUUID()
         val healthyGuildId = UUID.randomUUID()
-        val failingGuild = Guild(failingGuildId, "Broken", createdAt = Instant.EPOCH)
-        val healthyGuild = Guild(healthyGuildId, "Healthy", createdAt = Instant.EPOCH)
+        val failingGuild = Guild(failingGuildId, "Broken", level = 50, createdAt = Instant.EPOCH)
+        val healthyGuild = Guild(healthyGuildId, "Healthy", level = 50, createdAt = Instant.EPOCH)
         val healthyPlayer = UUID.randomUUID()
 
         val config = mockk<ConfigService>()
@@ -86,8 +92,9 @@ class GuildDiscordRoleShadowPublisherTest {
             Member(healthyPlayer, healthyGuildId, UUID.randomUUID(), Instant.EPOCH),
         )
         every { repository.get(healthyGuildId) } returns null
+        every { repository.get(failingGuildId) } returns null
 
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository) { backend }
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository, progression) { backend }
         val summary = publisher.reconcileAll().join()
 
         assertEquals(1, summary.claimsPublished)
@@ -106,7 +113,7 @@ class GuildDiscordRoleShadowPublisherTest {
         )
 
         val repository = mockk<GuildDiscordRoleRepository>()
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository) {
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository, progression) {
             error("backend must not be resolved while shadow publication is disabled")
         }
 
@@ -128,7 +135,7 @@ class GuildDiscordRoleShadowPublisherTest {
             ),
         )
 
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository) { backend }
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, memberService, repository, progression) { backend }
         val guildId = UUID.randomUUID()
         val summary = publisher.deleteGuild(guildId).join()
 
@@ -148,10 +155,11 @@ class GuildDiscordRoleShadowPublisherTest {
         every { config.loadConfig() } returns MainConfig(
             discordGuildRoles = DiscordGuildRolesConfig(enabled = true, enthusiaShadowEnabled = true),
         )
-        every { guilds.getGuild(guildId) } returns Guild(guildId, "Broken", createdAt = Instant.EPOCH)
+        every { guilds.getGuild(guildId) } returns Guild(guildId, "Broken", level = 50, createdAt = Instant.EPOCH)
+        every { repository.get(guildId) } returns null
         every { members.getGuildMembers(guildId) } throws IllegalStateException("unavailable member snapshot")
         val backend = CapturingBackend()
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository) { backend }
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository, progression) { backend }
         assertEquals(1, publisher.reconcileGuild(guildId).join().failures)
         assertEquals(null, backend.lastDesired)
     }
@@ -166,7 +174,7 @@ class GuildDiscordRoleShadowPublisherTest {
             discordGuildRoles = DiscordGuildRolesConfig(enabled = true, enthusiaShadowEnabled = true),
         )
         every { guilds.getAllGuilds() } throws IllegalStateException("guild DB is unavailable")
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository) {
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository, progression) {
             error("shadow backend must not initialize when the guild listing fails")
         }
         assertEquals(1, publisher.reconcileAll().join().failures)
@@ -181,10 +189,59 @@ class GuildDiscordRoleShadowPublisherTest {
         every { config.loadConfig() } returns MainConfig(
             discordGuildRoles = DiscordGuildRolesConfig(enabled = true, enthusiaShadowEnabled = true),
         )
-        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository) {
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository, progression) {
             error("shadow backend not loaded")
         }
         assertEquals(1, publisher.deleteGuild(UUID.randomUUID()).join().failures)
+    }
+
+    @Test
+    fun `never unlocked low level guild produces no shadow role claim`() {
+        val guildId = UUID.randomUUID()
+        val config = mockk<ConfigService>()
+        val guilds = mockk<GuildService>()
+        val members = mockk<MemberService>()
+        val repository = mockk<GuildDiscordRoleRepository>()
+        val backend = CapturingBackend()
+        every { config.loadConfig() } returns MainConfig(
+            discordGuildRoles = DiscordGuildRolesConfig(
+                enabled = true, minimumLevel = 50, enthusiaShadowEnabled = true,
+            ),
+        )
+        every { guilds.getGuild(guildId) } returns Guild(
+            guildId, "New Guild", level = 49, createdAt = Instant.EPOCH,
+        )
+        every { repository.get(guildId) } returns null
+
+        val publisher = GuildDiscordRoleShadowPublisher(config, guilds, members, repository, progression) { backend }
+        assertEquals(GuildDiscordRoleShadowSummary(), publisher.reconcileGuild(guildId).join())
+        assertEquals(null, backend.lastDesired)
+        verify(exactly = 0) { members.getGuildMembers(guildId) }
+    }
+
+    @Test
+    fun `progression read failure blocks incomplete shadow rather than publishing`() {
+        val guildId = UUID.randomUUID()
+        val config = mockk<ConfigService>()
+        val guilds = mockk<GuildService>()
+        val members = mockk<MemberService>()
+        val repository = mockk<GuildDiscordRoleRepository>()
+        val failingProgression = mockk<ProgressionRepository>()
+        val backend = CapturingBackend()
+        every { config.loadConfig() } returns MainConfig(
+            discordGuildRoles = DiscordGuildRolesConfig(enabled = true, enthusiaShadowEnabled = true),
+        )
+        every { guilds.getGuild(guildId) } returns Guild(
+            guildId, "Unavailable", level = 80, createdAt = Instant.EPOCH,
+        )
+        every { repository.get(guildId) } returns null
+        every { failingProgression.getGuildProgression(guildId) } throws IllegalStateException("progression outage")
+
+        val publisher = GuildDiscordRoleShadowPublisher(
+            config, guilds, members, repository, failingProgression,
+        ) { backend }
+        assertEquals(1, publisher.reconcileGuild(guildId).join().failures)
+        assertEquals(null, backend.lastDesired)
     }
 
     private class CapturingBackend : GuildDiscordRoleBackend {

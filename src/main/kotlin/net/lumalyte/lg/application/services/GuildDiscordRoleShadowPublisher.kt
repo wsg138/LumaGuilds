@@ -1,6 +1,7 @@
 package net.lumalyte.lg.application.services
 
 import net.lumalyte.lg.application.persistence.GuildDiscordRoleRepository
+import net.lumalyte.lg.application.persistence.ProgressionRepository
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
@@ -27,6 +28,7 @@ class GuildDiscordRoleShadowPublisher(
     private val guildService: GuildService,
     private val memberService: MemberService,
     private val repository: GuildDiscordRoleRepository,
+    private val progressionRepository: ProgressionRepository,
     private val backendProvider: () -> GuildDiscordRoleBackend?,
 ) {
     fun enabled(): Boolean {
@@ -50,20 +52,28 @@ class GuildDiscordRoleShadowPublisher(
         if (!enabled()) return@safePublish completed(GuildDiscordRoleShadowSummary())
         val guild = guildService.getGuild(guildId)
             ?: return@safePublish completed(GuildDiscordRoleShadowSummary())
+        // Match the live DiscordSRV writer: only guilds above the current
+        // progression threshold, or with a persisted prior unlock, own a role.
+        // A failed progression read must fail this SHADOW sample closed.
+        val config = configService.loadConfig().discordGuildRoles
+        val legacyLink = repository.get(guild.id)
+        val level = progressionRepository.getGuildProgression(guild.id)?.currentLevel ?: guild.level
+        if (level < config.minimumLevel && legacyLink == null) {
+            return@safePublish completed(GuildDiscordRoleShadowSummary())
+        }
         val backend = backendProvider()
             ?: return@safePublish completed(GuildDiscordRoleShadowSummary(failures = 1))
         if (!backend.isAvailable()) {
             return@safePublish completed(GuildDiscordRoleShadowSummary(failures = 1))
         }
 
-        val config = configService.loadConfig().discordGuildRoles
         val desired = GuildDiscordRoleDesiredState(
             guildId = guild.id,
             roleName = renderRoleName(config.roleNameFormat, guild.name),
             desiredPlayerIds = memberService.getGuildMembers(guild.id)
                 .mapTo(linkedSetOf()) { member -> member.playerId },
         )
-        val legacyOwnership = repository.get(guild.id)?.let { link ->
+        val legacyOwnership = legacyLink?.let { link ->
             GuildDiscordRoleOwnership(
                 provider = GuildDiscordRoleProvider.DISCORDSRV,
                 providerReference = link.discordRoleId,
