@@ -58,11 +58,11 @@ class GuildDiscordRoleShadowRuntime(
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onGuildDisbanded(event: GuildDisbandedEvent) {
-        observe("guild disband guild=${event.guild.id}", publisher.deleteGuild(event.guild.id))
+        observe("guild disband", publisher.deleteGuild(event.guild.id))
     }
 
     private fun publish(guildId: UUID, operation: String) {
-        observe("$operation guild=$guildId", publisher.reconcileGuild(guildId))
+        observe(operation, publisher.reconcileGuild(guildId))
     }
 
     private fun observe(
@@ -72,7 +72,7 @@ class GuildDiscordRoleShadowRuntime(
         future.whenComplete { result, error ->
             when {
                 error != null ->
-                    plugin.logger.warning("Enthusia guild-role shadow publication failed for $operation: ${error.message}")
+                    plugin.logger.warning("Enthusia guild-role shadow publication failed for $operation; no Discord roles were changed.")
                 result.failures > 0 ->
                     plugin.logger.warning(
                         "Enthusia guild-role shadow publication reported ${result.failures} failure(s) for $operation",
